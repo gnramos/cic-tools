@@ -2,11 +2,15 @@ import locale
 import os
 
 
-class Progress():
+class Progress(dict):
     """Handle participants activity completion information.
 
     Processes a Moodle report data to extract participants activity completion
-    information.
+    information. Extends dict, so keys are the student IDs and each item has
+    the following structure:
+        {'Name': (str - student full name),
+         'Frequência': (int - student participation (%)),
+         'Faltas':  (int - student absence (%))}
 
     To get the data file:
         1. Access the Activity Completion report via:
@@ -18,12 +22,7 @@ class Progress():
     def __init__(self, file):
         """Constructor.
 
-        Loads the data from the file in a dict ("data") with the following
-        structure" {Student_ID: {'Name': (str - student full name),
-                                'Frequência': (int - student participation (%)),
-                                'Faltas':  (int - student absence (%))
-                                }
-                   }
+        Loads the data from the file into instance.
 
         Arguments:
         file -- the CSV file to read from.
@@ -36,33 +35,35 @@ class Progress():
             header = next(csvreader)  # skip header
             activities = (len(header) - 2) / 2
 
-            self.data = {self._get_id(row): self._get_info(row, activities)
-                         for row in csvreader}
+            for row in csvreader:
+                student_id, _ = row[1].split('@')
+                frequency = 100 * row.count('Concluído') // activities
+                self[student_id] = {'Name': row[0],
+                                    'Frequência': frequency,
+                                    'Faltas': 100 - frequency}
 
-            self._sorted_keys = [k
-                                 for k in sorted(self.data,
-                                                 key=lambda s: locale.strxfrm(
-                                                     self.data[s]['Name']))]
-
-    def _get_id(self, row):
-        return row[1].split('@')[0]
-
-    def _get_info(self, row, activities):
-        frequency = 100 * row.count('Concluído') // activities
-        return {'Name': row[0],
-                'Frequência': frequency,
-                'Faltas': 100 - frequency}
+        self._sorted_keys = [k
+                             for k in sorted(self.keys(),
+                                             key=lambda x: locale.strxfrm(
+                                                 self[x]['Name']))]
 
     def __str__(self):
-        return '\n'.join(f'{self.data[k]["Name"]}, {k}, '
-                         f'{self.data[k]["Frequência"]}'
+        return '\n'.join(f'{self[k]["Name"]}, {k}, '
+                         f'{self[k]["Frequência"]}'
                          for k in self._sorted_keys)
 
 
-class QuizResponse():
+class QuizResponse(dict):
     """Handles quiz responses.
 
     Processes a Moodle report data to extract quiz responses information.
+    Extends dict, so keys are the student IDs and each item has the following
+    structure:
+        {'Name': (str - student full name),
+         'Quiz': (dict)
+            {q: (int - question number in quiz)
+                {'attempt': (str - attempt value),
+                 'answer': (str - correct answer value)}}}
 
     To get the data file:
        1. Access the quiz response report via:
@@ -75,24 +76,27 @@ class QuizResponse():
     """
 
     def __init__(self, file, ignore_list=[]):
+        """Constructor.
+
+        Loads the data from the file into instance.
+
+        Arguments:
+        file -- the JSON file to read from.
+        """
+
         import json
 
         self.data = {}
         with open(file) as f:
             data = json.load(f)
 
-        self.data = {self._get_id(data): self._get_info(data, ignore_list)
-                     for data in data[0]}
-
-    def _get_id(self, data):
-        return data[2].split('@')[0]
-
-    def _get_info(self, data, ignore_list):
-        return {'Name': f'{data[1]} {data[0]}',
-                'Quiz': {q: {'attempt': data[(2 * q) + 8].strip(' \r\n'),
-                             'answer': data[(2 * q) + 9].strip(' \r\n')}
-                         for q in range(len(data[8::2]))
-                         if q not in ignore_list}}
+        for d in data[0]:
+            student_id, _ = d[2].split('@')
+            self[student_id] = {'Name': f'{d[1]} {d[0]}',
+                                'Quiz': {q: {'attempt': d[(2 * q) + 8].strip(' \r\n'),
+                                             'answer': d[(2 * q) + 9].strip(' \r\n')}
+                                         for q in range(len(d[8::2]))
+                                         if q not in ignore_list}}
 
     def _make_header(self, student_info, file_type):
         if file_type == 'py':
@@ -108,7 +112,7 @@ class QuizResponse():
         return content[-1] != '-' or content.count('\n') > 2
 
     def to_files(self, path, file_type):
-        for student_id, info in self.data.items():
+        for student_id, info in self.items():
             student_info = [info["Name"], f'{student_id}']
             header = f'{self._make_header(student_info, file_type)}\n\n'
 
@@ -127,10 +131,10 @@ class QuizResponse():
                             f.write(src['answer'])
 
     def __str__(self):
-        return '\n'.join(f'{self.data[k]["Name"]}, {k}'
-                         for k in sorted(self.data,
-                                         key=lambda s: locale.strxfrm(
-                                            self.data[s]["Name"])))
+        return '\n'.join(f'{self[k]["Name"]}, {k}'
+                         for k in sorted(self.keys(),
+                                         key=lambda x: locale.strxfrm(
+                                            self[x]['Name'])))
 
 
 locale.setlocale(locale.LC_ALL, '')
@@ -142,16 +146,18 @@ locale.setlocale(locale.LC_ALL, '')
 #     # Check progress.
 #     progress = Progress(sys.argv[1])
 #     print(progress)
+#     print(progress['180110730'])
 
 #     # Check responses & write to files.
-#     responses = QuizResponse((sys.argv[2]))
+#     responses = QuizResponse(sys.argv[2])
 #     print(responses)
+#     print(responses['180110730'])
 #     responses.to_files('ResponseDir', 'py')
 
 #     # Crosse reference.
 #     progress = Progress(sys.argv[1])
 #     responses = QuizResponse((sys.argv[2]), [0])  # ignore first
-#     for student_id in progress.data:
-#         if student_id in responses.data:
-#             print(progress.data[student_id]['Name'])
-#             print(responses.data[student_id]['Name'])
+#     for student_id in progress:
+#         print(progress[student_id]['Name'])
+#         if student_id in responses:
+#             print(responses[student_id]['Name'])
