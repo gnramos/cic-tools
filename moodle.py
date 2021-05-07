@@ -1,8 +1,67 @@
+import csv
 import locale
 import os
 
 
-class Progress(dict):
+class MoodleBase(dict):
+    """Base class for handling student information from Moodle reports.
+
+    Extends dict, so keys are the student IDs and each item is a dict with (at
+    least) a 'Name' key with the student's name.
+    """
+
+    def __init__(self):
+        self._sorted_keys = sorted(self.keys(), key=lambda x: locale.strxfrm(
+            self[x]['Name']))
+
+    def __str__(self):
+        return '\n'.join(f'{self[k]["Name"]}, {k}' for k in self._sorted_keys)
+
+
+class Grades(MoodleBase):
+    """Handle participants activity completion information.
+
+    Processes a Moodle report data to extract participants activity completion
+    information. Extends dict, so keys are the student IDs and each item has
+    the following structure:
+        {'Name': (str - student full name),
+         'Notas': (dict)
+            {activity (str): grade (float)}}
+
+    To get the data file:
+        1. Access the Grades report via:
+            Course > This Course > Grades > Export (tab).'
+        2. Select the "Text File" format (tab).
+        3. Select the desired group.
+        4. Select the desired items.
+        5. Select the export format option: "comma".
+    """
+
+    def __init__(self, file):
+        """Constructor.
+
+        Loads the data from the file into instance.
+
+        Arguments:
+        file -- the CSV file to read from.
+        """
+
+        with open(file) as csvfile:
+            csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
+
+            header = next(csvreader)  # skip header
+            totais = [i for i, col in enumerate(header) if col.endswith(' total (Real)')]
+            totais.append(header.index('Nota Final (Real)'))
+
+            for row in csvreader:
+                first_name, last_names, student_id = row[:3]
+                self[student_id] = {'Name': f'{first_name} {last_names}',
+                                    'Notas': {header[i]: float(row[i]) for i in totais}}
+
+        super().__init__()
+
+
+class Progress(MoodleBase):
     """Handle participants activity completion information.
 
     Processes a Moodle report data to extract participants activity completion
@@ -29,7 +88,6 @@ class Progress(dict):
         """
 
         with open(file) as csvfile:
-            import csv
             csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
 
             header = next(csvreader)  # skip header
@@ -42,18 +100,10 @@ class Progress(dict):
                                     'Frequência': frequency,
                                     'Faltas': 100 - frequency}
 
-        self._sorted_keys = [k
-                             for k in sorted(self.keys(),
-                                             key=lambda x: locale.strxfrm(
-                                                 self[x]['Name']))]
-
-    def __str__(self):
-        return '\n'.join(f'{self[k]["Name"]}, {k}, '
-                         f'{self[k]["Frequência"]}'
-                         for k in self._sorted_keys)
+        super().__init__()
 
 
-class QuizResponse(dict):
+class QuizResponse(MoodleBase):
     """Handles quiz responses.
 
     Processes a Moodle report data to extract quiz responses information.
@@ -98,6 +148,8 @@ class QuizResponse(dict):
                                          for q in range(len(d[8::2]))
                                          if q not in ignore_list}}
 
+        super().__init__()
+
     def _make_header(self, student_info, file_type):
         if file_type == 'py':
             return '\n'.join(f'# {i}' for i in student_info)
@@ -130,12 +182,6 @@ class QuizResponse(dict):
                         with open(response_file, 'w') as f:
                             f.write(src['answer'])
 
-    def __str__(self):
-        return '\n'.join(f'{self[k]["Name"]}, {k}'
-                         for k in sorted(self.keys(),
-                                         key=lambda x: locale.strxfrm(
-                                            self[x]['Name'])))
-
 
 locale.setlocale(locale.LC_ALL, '')
 
@@ -143,21 +189,28 @@ locale.setlocale(locale.LC_ALL, '')
 # if __name__ == '__main__':
 #     import sys
 
+#     # Check grades.
+#     grades = Grades(sys.argv[1])
+#     print(grades)
+
 #     # Check progress.
-#     progress = Progress(sys.argv[1])
+#     progress = Progress(sys.argv[2])
 #     print(progress)
 #     print(progress['180110730'])
 
 #     # Check responses & write to files.
-#     responses = QuizResponse(sys.argv[2])
+#     responses = QuizResponse(sys.argv[3])
 #     print(responses)
 #     print(responses['180110730'])
 #     responses.to_files('ResponseDir', 'py')
 
-#     # Crosse reference.
-#     progress = Progress(sys.argv[1])
-#     responses = QuizResponse((sys.argv[2]), [0])  # ignore first
-#     for student_id in progress:
-#         print(progress[student_id]['Name'])
+#     # Cross reference.
+#     grades = Grades(sys.argv[1])
+#     progress = Progress(sys.argv[2])
+#     responses = QuizResponse(sys.argv[3], [0])  # ignore first
+#     for student_id in grades:
+#         print(grades[student_id]['Name'])
+#         if student_id in progress:
+#             print(progress[student_id]['Name'])
 #         if student_id in responses:
 #             print(responses[student_id]['Name'])
