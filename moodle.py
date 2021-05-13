@@ -193,7 +193,8 @@ class QuizResponse(MoodleBase):
             header = f'{self._make_header(student_info, ext)}\n\n'
 
             for q, src in info['Quiz'].items():
-                if q not in ignore_list and self._has_response(src.get('attempt', '')):
+                if (q not in ignore_list and
+                        self._has_response(src.get('attempt', ''))):
                     q_dir = os.path.join(path, f'Q{q}')
                     os.makedirs(q_dir, exist_ok=True)
                     response_file = os.path.join(q_dir,
