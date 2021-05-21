@@ -19,7 +19,7 @@ class Grades(utils.Students):
         5. Selecione o formato de exportação "Real" com separador "Vírgula".
     """
 
-    def __init__(self, file):
+    def __init__(self, file, total_only=False):
         """Construtor.
 
         Carrega os dados do arquivo.
@@ -32,15 +32,19 @@ class Grades(utils.Students):
             csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
 
             header = next(csvreader)  # skip header
-            grades_idx = [i for i, col in enumerate(header)
-                          if col.endswith(' total (Real)')]
-            grades_idx.append(header.index('Nota Final (Real)'))
+            if total_only:
+                grades_idx = [i for i, col in enumerate(header)
+                              if col.endswith(' total (Real)')]
+                grades_idx.append(header.index('Nota Final (Real)'))
+            else:
+                # 6 is the first grade, last column is "last download" info
+                grades_idx = range(6, len(header) - 1)
 
             for row in csvreader:
-                first_name, last_names, s_id = row[:3]
-                self[s_id] = {'Name': f'{first_name} {last_names}'}
+                s_id = row[5].split('@')[0]
+                self[s_id] = {'Name': f'{row[0]} {row[1]}'}
                 for i in grades_idx:
-                    self[s_id][header[i]] = float(row[i])
+                    self[s_id][header[i]] = 0 if row[i] == '-' else float(row[i])
 
 
 class Participants(utils.Students):
@@ -57,23 +61,26 @@ class Participants(utils.Students):
     Apenas o arquivo HTML é necessário.
     """
 
-    def __init__(self, file):
+    def __init__(self, file, group=''):
         """Construtor.
 
         Carrega os dados do arquivo.
 
         Argumentos:
         file -- o arquivo HTML a ser lido.
+        group -- nome [parcial] do grupo desejado.
         """
 
         with open(file) as htmlfile:
             html = htmlfile.read()
 
-        pattern = (r'<label for=.*?user\d+.*?<img.*?>(.*?)</a>.*?'
-                   r'(\d+)@aluno.unb.br[.\s\S]*?title="Editar grupos.*?>[\s\S]'
-                   r' +(\w.*)[\s\S]')
-        for name, s_id, group in re.findall(pattern, html):
-            self[s_id] = {'Name': name, 'Group': group}
+        pattern = re.compile(r'<label for=.*?user\d+.*?<img.*?>(.*?)</a>.*?'
+                             r'(\d+)@aluno.unb.br[.\s\S]*?'
+                             r'title="Editar grupos.*?>[\s\S]'
+                             r' *(\w.*)[\s\S]')
+        for name, s_id, s_group in pattern.findall(html):
+            if group in s_group:
+                self[s_id] = {'Name': name, 'Group': s_group}
 
 
 class Progress(utils.Students):
