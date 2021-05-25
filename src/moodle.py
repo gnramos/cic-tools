@@ -118,7 +118,7 @@ class Progress(utils.Students):
                               'Faltas': 100 - frequency}
 
 
-class QuizResponse(utils.Students):
+class Responses(utils.Students):
     """Processa o relatório de respostas de um questionário.
 
     Acrescenta "Quiz", um dicionário cujas chaves são índices das questões no
