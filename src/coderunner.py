@@ -33,10 +33,10 @@ class CheckList():
     DEFAULTS = {
         'coderunnertype': 'python3_try_except',
         'defaultgrade': '1',
-        'displayfeedback': '0',  # Set by quiz | Force Show | Force hide
+        'displayfeedback': '0',  # [Set by quiz, Force Show, Force hide]
         'allornothing': '0',
         'penaltyregime': '0, 0, 10, 20, ...',
-        'precheck': '2',  # Disabled | Empty | Examples | Selected | All
+        'precheck': '2',  # [Disabled, Empty, Examples, Selected, All]
         'validateonsave': '1',
         'testcases': {'example': ('1', '0.0010000', 'SHOW', 3),
                       'visible': ('0', '1.0000000', 'SHOW', 3),
@@ -80,6 +80,22 @@ class CheckList():
 
         return html
 
+    @staticmethod
+    def _get_category(question, sep=' > '):
+        if not CheckList._is_category(question):
+            raise ValueError('Question does not define category!')
+        return question.find('category/text').text.replace(
+                    '$course$/top/', '').replace('/', sep)
+
+    @staticmethod
+    def _is_category(question):
+        return question.get('type') == 'category'
+
+    @staticmethod
+    def _is_coderunner(question):
+        return (question.get('type') == 'coderunner' and
+                question.find('prototypetype').text == '0')
+
     class Fix():
         """Attempts to fix questions settings with given values.
 
@@ -87,10 +103,10 @@ class CheckList():
         with given one.
         """
 
-        CANNOT_FIX = ['tags', 'testcases']
+        UNFIXABLE = ['tags', 'testcases']
 
         @staticmethod
-        def questiontext(question):
+        def questiontext(question, value=None):
             name = question.find('name/text').text
             questiontext = question.find('questiontext/text')
 
@@ -112,18 +128,19 @@ class CheckList():
                 question.find(setting).text = value
 
         @staticmethod
-        def setting(question, setting, value):
-            try:
-                if eval(f'CheckList.Check.{setting}(question, value)'):
-                    if setting in CheckList.Fix.CANNOT_FIX:
-                        print(f'Cannot fix "{setting}"!')
-                    elif setting == 'questiontext':
-                        print(f'Ajustando "questiontext".')
-                        CheckList.Fix.questiontext(question)
-                    else:
-                        CheckList.Fix.set_default(question, setting, value)
-            except AttributeError:
-                CheckList.Fix.set_default(question, setting, value)
+        def setting(category, question, setting, value, sep=' > '):
+            # try:
+            if (hasattr(CheckList.Check, setting) and
+                    eval(f'CheckList.Check.{setting}(question, value)')):
+                if setting in CheckList.Fix.UNFIXABLE:
+                    name = question.find('name/text').text
+                    print(f'Cannot fix {category}{sep}{name}{sep}"{setting}"!')
+                elif hasattr(CheckList.Fix, setting):
+                    eval(f'CheckList.Fix.{setting}(question, value)')
+                else:
+                    CheckList.Fix.set_default(question, setting, value)
+            # except AttributeError:
+            #     CheckList.Fix.set_default(question, setting, value)
 
     class Check():
         """Attempts to check questions settings with given values.
@@ -139,7 +156,7 @@ class CheckList():
         @staticmethod
         def coderunnertype(question, value):
             question_type = question.find('coderunnertype').text
-            issues = None
+            issues = ''
             if question_type != 'python3_try_except':
                 issues = f'tipo de questão é {question_type}'
             if question.find('template'):
@@ -151,8 +168,7 @@ class CheckList():
 
         @staticmethod
         def default(question, setting, default):
-            text = question.find(setting).text
-            if text == default:
+            if (text := question.find(setting).text) == default:
                 return None
             return f'é "{text}" (deveria ser "{default}")'
 
@@ -177,8 +193,7 @@ class CheckList():
 
         @staticmethod
         def setting(question, setting, value=None):
-            if setting in ['answer', 'coderunnertype', 'generalfeedback',
-                           'questiontext', 'tags', 'testcases']:
+            if hasattr(CheckList.Check, setting):
                 if issues := eval(f'CheckList.Check.{setting}(question, value)'):
                     return f'[{setting}] {issues}'
             elif value is not None:
@@ -201,7 +216,7 @@ class CheckList():
             def check(useasexample, mark_value, display_value, num_cases):
                 cases = [test for test in question.findall(
                     f'testcases/testcase[@useasexample="{useasexample}"]')
-                         if test.find('display/text').text == display_value]
+                    if test.find('display/text').text == display_value]
 
                 issues = ''
                 for t, test in enumerate(cases):
@@ -209,23 +224,26 @@ class CheckList():
                         if issues:
                             issues = f'{issues}. '
 
-                        issues = f'Caso {t} tem pontuação {test.attrib["mark"]} ' \
-                                 f'(deveria ser {mark_value})'
+                        issues = (f'Caso {t} tem pontuação '
+                                  f'{test.attrib["mark"]} '
+                                  f'(deveria ser {mark_value})')
 
                     display = test.find('display/text').text
                     if display != display_value:
                         issues = f'{issues} e' if has_issue else f'Caso {t}'
-                        issues = f'{issues} tem visibilidade {display} (deveria ser ' \
-                                 f'"{display_value}")'
+                        issues = (f'{issues} tem visibilidade {display} '
+                                  f'(deveria ser "{display_value}")')
 
                 if len(cases) != num_cases:
-                    type = ('exemplos'
-                            if useasexample == '1'
-                            else 'visíveis' if display_value == "SHOW"
-                            else 'escondidos')
+                    if useasexample == '1':
+                        test_type = 'exemplos'
+                    elif display_value == 'SHOW':
+                        test_type = 'visíveis'
+                    else:
+                        test_type = 'escondidos'
                     issues = f'{issues} e são' if issues else 'São'
-                    issues = f'{issues} {len(cases)} testes {type} (deveriam ser ' \
-                             f'{num_cases})'
+                    issues = (f'{issues} {len(cases)} testes {test_type} '
+                              f'(deveriam ser {num_cases})')
 
                 return issues
 
@@ -242,19 +260,13 @@ class CheckList():
         question Element).
         """
 
-        # Within the <quiz> tags are any number of <question> tags. One of
-        # these <question> tags can be a dummy question with a category type to
-        # specify a category for the import/export.
-        #
-        # Portanto, questões subsequentes à questão de tipo "categoria"
-        # pertencem à categoria definida.
         tree = ET.parse(file)
         for question in tree.getroot():
             yield tree, question
 
     @staticmethod
-    def validate(file, values):
-        """Validates all the questions in the quiz file to the given setting values.
+    def validate(file, values, sep='>'):
+        """Validates all questions in quiz file with the given setting values.
 
         Returns a boolean indicating if no issue was found. Also prints any
         found issues (identifying the question).
@@ -262,15 +274,18 @@ class CheckList():
         Args:
           - file: XML file with quiz/question info.
           - values: dict in the {setting: value} format.
+          - sep: string for separating question category levels.
         """
-        last_category = current_category = None
-        has_issues = False
+        category, has_issues = None, False
         for _, question in CheckList.questions(file):
-            this_type = question.get('type')
-            if this_type == 'category':
-                last_category = current_category
-                current_category = question.find('category/text').text.replace('$course$/top/', '')
-            elif this_type == 'coderunner' and question.find('prototypetype').text == '0':
+            # As per Moodle documentation: "Within the <quiz> tags are any
+            # number of <question> tags. One of these <question> tags can be a
+            # dummy question with a category type to specify a category for the
+            # import/export." Thus, all questions following a "category" type
+            # belong to that category in the question bank.
+            if CheckList._is_category(question):
+                category = CheckList._get_category(question)
+            elif CheckList._is_coderunner(question):
                 if not question.find('tags'):
                     question.append(ET.Element('tags'))
 
@@ -280,8 +295,7 @@ class CheckList():
                                                          values.get(child.tag,
                                                                     None)):
                         has_issues = True
-                        prefix = f'{current_category} > ' if current_category else ''
-                        print(f'{prefix}"{name}": {issues}.')
+                        print(f'{category}{sep}{name}: {issues}.')
 
         return not has_issues
 
@@ -302,24 +316,49 @@ class CheckList():
             print(f'Overwriting file "{file}".')
             outfile = file
 
-        last_category = current_category = None
+        category = None
         for tree, question in CheckList.questions(file):
-            this_type = question.get('type')
-            if this_type == 'category':
-                last_category = current_category
-                current_category = question.find('category/text').text.replace('$course$/top/', '')
-            elif this_type == 'coderunner' and question.find('prototypetype').text == '0':
+            if CheckList._is_category(question):
+                category = CheckList._get_category(question)
+            elif CheckList._is_coderunner(question):
                 for child in question:
-                    CheckList.Fix.setting(question, child.tag, values.get(child.tag, None))
+                    CheckList.Fix.setting(category, question, child.tag,
+                                          values.get(child.tag, None))
 
                 CheckList._add_CDATA(question)
 
         tree.write(outfile, encoding='UTF-8', xml_declaration=True)
 
 
-if __name__ == '__main__':
-    import sys
+def __print_dict__(d, indent=''):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            print(f'{indent} - {k}:')
+            __print_dict__(v, f'    {indent}')
+        else:
+            print(f'{indent} - {k}: {v}')
 
-    # Check & Fix the first given argument.
-    if not CheckList.validate(sys.argv[1], CheckList.DEFAULTS):
-        CheckList.set_defaults(sys.argv[1], CheckList.DEFAULTS)
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file', help='Quiz XML file.')
+    parser.add_argument('-l', '--list_defaults', action='store_true',
+                        help='List default values.')
+    parser.add_argument('-d', '--set_defaults', action='store_true',
+                        help='Set default values, overwrites the given file '
+                        'unless the outfile is given.')
+    parser.add_argument('-o', '--outfile',
+                        help='Output file if overwriting any values.')
+    args = parser.parse_args()
+
+    if args.list_defaults:
+        print('Default values:')
+        __print_dict__(CheckList.DEFAULTS)
+    else:
+        print('Validating values...\n')
+        is_valid = CheckList.validate(args.file, CheckList.DEFAULTS)
+        if args.set_defaults and not is_valid:
+            print('\nSetting default values...\n')
+            CheckList.set_defaults(args.file, CheckList.DEFAULTS, args.outfile)
