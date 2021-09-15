@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 def _CDATA(content):
     # https://docs.moodle.org/310/en/Moodle_XML_format
     # HTML fragments should be within CDATA section
-    # content = re.sub(r']]>', r']]&gt;', content).strip()
+    content = re.sub(r']]>', r']]&gt;', content).strip()
     element = ET.Element('![CDATA[')
     element.text = content
     return element
@@ -30,6 +30,12 @@ ET._serialize_xml = ET._serialize['xml'] = _serialize_xml_with_CDATA
 
 
 class CheckList():
+    """Checks (and updates) questions according to expected values.
+
+    Uses a specific static method per setting, if available.
+    """
+
+    UNFIXABLE = ['tags', 'testcases']
     DEFAULTS = {
         'coderunnertype': 'python3_try_except',
         'defaultgrade': '1',
@@ -59,6 +65,110 @@ class CheckList():
                 element.clear()
                 element.append(_CDATA(CheckList._clean_html(text)))
 
+    # _check_SETTING methods
+    @staticmethod
+    def _check_answer(question, value):
+        return None if question.find('answer').text else 'ausente'
+
+    @staticmethod
+    def _check_coderunnertype(question, value):
+        question_type = question.find('coderunnertype').text
+        issues = ''
+        if question_type != 'python3_try_except':
+            issues = f'tipo de questão é {question_type}'
+        if question.find('template'):
+            if issues:
+                issues = f'{issues} e '
+            issues = f'{issues}já tem template de correção'
+
+        return issues
+
+    @staticmethod
+    def _check_default(question, setting, default):
+        if (text := question.find(setting).text) == default:
+            return None
+        return f'é "{text}" (deveria ser "{default}")'
+
+    @staticmethod
+    def _check_generalfeedback(question, value):
+        if question.find('generalfeedback/text').text:
+            return None
+        return 'ausente'
+
+    @staticmethod
+    def _check_questiontext(question, values):
+        name = question.find('name/text').text
+        questiontext = question.find('questiontext/text').text
+        issues = ''
+        if f'<h3>{name}</h3>' not in questiontext:
+            issues = 'não apresenta título'
+        if '<span' in questiontext:
+            if issues:
+                issues = f'{issues} e '
+            issues = f'{issues}tem tag <span>'
+        return issues
+
+    @staticmethod
+    def _check_setting(question, setting, value=None):
+        if hasattr(CheckList, f'_check_{setting}'):
+            if issues := eval(f'CheckList._check_{setting}(question, value)'):
+                return f'[{setting}] {issues}'
+        elif value is not None:
+            if issues := CheckList._check_default(question, setting, value):
+                return f'[{setting}] {issues}'
+        return None
+
+    @staticmethod
+    def _check_tags(question, value):
+        tags = [test.text for test in question.findall('tags/tag/text')]
+        if num_tags := sum(tag.lower() in ('fácil', 'médio', 'difícil')
+                           for tag in tags):
+            if num_tags > 1:
+                return 'múltiplos níveis de dificuldade'
+        else:
+            return 'nível de dificuldade ausente'
+
+    @staticmethod
+    def _check_testcases(question, value):
+        def check(useasexample, mark_value, display_value, num_cases):
+            cases = [test for test in question.findall(
+                f'testcases/testcase[@useasexample="{useasexample}"]')
+                if test.find('display/text').text == display_value]
+
+            issues = ''
+            for t, test in enumerate(cases):
+                if has_issue := (mark_value != test.attrib['mark']):
+                    if issues:
+                        issues = f'{issues}. '
+
+                    issues = (f'Caso {t} tem pontuação '
+                              f'{test.attrib["mark"]} '
+                              f'(deveria ser {mark_value})')
+
+                display = test.find('display/text').text
+                if display != display_value:
+                    issues = f'{issues} e' if has_issue else f'Caso {t}'
+                    issues = (f'{issues} tem visibilidade {display} '
+                              f'(deveria ser "{display_value}")')
+
+            if len(cases) != num_cases:
+                if useasexample == '1':
+                    test_type = 'exemplos'
+                elif display_value == 'SHOW':
+                    test_type = 'visíveis'
+                else:
+                    test_type = 'escondidos'
+                issues = f'{issues} e são' if issues else 'São'
+                issues = (f'{issues} {len(cases)} testes {test_type} '
+                          f'(deveriam ser {num_cases})')
+
+            return issues
+
+        issues = '. '.join(check(*value[case])
+                           for case in ('example', 'visible', 'hidden'))
+
+        return issues
+
     @staticmethod
     def _clean_html(html):
         def replace_empty_span(matchobj):
@@ -71,7 +181,7 @@ class CheckList():
                         (r'&nbsp;', ' '),
                         (r'<([^ ]*?)><br></(\1)>', ''),
                         (r'<([^ ]*?)></(\1)>', ''),
-                        # Tentanto eliminar <span> vazios aninhados aninhados.
+                        # Tentanto eliminar <span> vazios aninhados.
                         (r'(<span>[.\s\S]*?</span>)', replace_empty_span),
                         (r'(<span>[.\s\S]*?</span>)', replace_empty_span))
 
@@ -81,191 +191,63 @@ class CheckList():
         return html
 
     @staticmethod
-    def _get_category(question, sep=' > '):
-        if not CheckList._is_category(question):
-            raise ValueError('Question does not define category!')
-        return question.find('category/text').text.replace(
-                    '$course$/top/', '').replace('/', sep)
+    def _fix_default(question, setting, value):
+        if value is not None and question.find(setting).text != value:
+            question.find(setting).text = value
 
     @staticmethod
-    def _is_category(question):
-        return question.get('type') == 'category'
+    def _fix_questiontext(question, value=None):
+        name = question.find('name/text').text
+        questiontext = question.find('questiontext/text')
+
+        # Handle regex characters.
+        name = ''.join(f'\\{c}' if c in r'\{[()]}.' else c for c in name)
+        pattern = f'<h(\\d)>{name}</h\\d>'
+        if m := re.search(pattern, questiontext.text, flags=re.IGNORECASE):
+            if m.group(1) != '3':
+                questiontext.text = re.sub(f'<h(\\d)>{name}</h\\d>',
+                                           f'<h3>{name}</h3>',
+                                           questiontext.text)
+        else:
+            questiontext.text = f'<h3>{name}</h3>\n{questiontext.text}'
 
     @staticmethod
-    def _is_coderunner(question):
-        return (question.get('type') == 'coderunner' and
-                question.find('prototypetype').text == '0')
+    def _fix_setting(category, question, setting, value, sep=' > '):
+        if setting in CheckList.UNFIXABLE:
+            return f'Não é possível ajustar "{setting}"!'
 
-    class Fix():
-        """Attempts to fix questions settings with given values.
+        if hasattr(CheckList, f'_fix_{setting}'):
+            exec(f'CheckList._fix_{setting}(question, value)')
+        else:
+            CheckList._fix_default(question, setting, value)
 
-        Uses specific static method, if available, or replaces existing value
-        with given one.
-        """
-
-        UNFIXABLE = ['tags', 'testcases']
-
-        @staticmethod
-        def questiontext(question, value=None):
-            name = question.find('name/text').text
-            questiontext = question.find('questiontext/text')
-
-            # Handle regex characters.
-            name = ''.join(f'\\{c}' if c in r'\{[()]}.' else c for c in name)
-            pattern = f'<h(\\d)>{name}</h\\d>'
-            if m := re.search(pattern, questiontext.text, flags=re.IGNORECASE):
-                if m.group(1) != '3':
-                    questiontext.text = re.sub(f'<h(\\d)>{name}</h\\d>',
-                                               f'<h3>{name}</h3>',
-                                               questiontext.text)
-            else:
-                questiontext.text = f'<h3>{name}</h3>\n{questiontext.text}'
-
-        @staticmethod
-        def set_default(question, setting, value):
-            if value is not None and question.find(setting).text != value:
-                print(f'Ajustando "{setting}".')
-                question.find(setting).text = value
-
-        @staticmethod
-        def setting(category, question, setting, value, sep=' > '):
-            # try:
-            if (hasattr(CheckList.Check, setting) and
-                    eval(f'CheckList.Check.{setting}(question, value)')):
-                if setting in CheckList.Fix.UNFIXABLE:
-                    name = question.find('name/text').text
-                    print(f'Cannot fix {category}{sep}{name}{sep}"{setting}"!')
-                elif hasattr(CheckList.Fix, setting):
-                    eval(f'CheckList.Fix.{setting}(question, value)')
-                else:
-                    CheckList.Fix.set_default(question, setting, value)
-            # except AttributeError:
-            #     CheckList.Fix.set_default(question, setting, value)
-
-    class Check():
-        """Attempts to check questions settings with given values.
-
-        Uses specific static method, if available, or simply compares existing
-        value to the given one.
-        """
-
-        @staticmethod
-        def answer(question, value):
-            return None if question.find('answer').text else 'ausente'
-
-        @staticmethod
-        def coderunnertype(question, value):
-            question_type = question.find('coderunnertype').text
-            issues = ''
-            if question_type != 'python3_try_except':
-                issues = f'tipo de questão é {question_type}'
-            if question.find('template'):
-                if issues:
-                    issues = f'{issues} e '
-                issues = f'{issues}já tem template de correção'
-
-            return issues
-
-        @staticmethod
-        def default(question, setting, default):
-            if (text := question.find(setting).text) == default:
-                return None
-            return f'é "{text}" (deveria ser "{default}")'
-
-        @staticmethod
-        def generalfeedback(question, value):
-            if question.find('generalfeedback/text').text:
-                return None
-            return 'ausente'
-
-        @staticmethod
-        def questiontext(question, values):
-            name = question.find('name/text').text
-            questiontext = question.find('questiontext/text').text
-            issues = ''
-            if f'<h3>{name}</h3>' not in questiontext:
-                issues = 'não apresenta título'
-            if '<span' in questiontext:
-                if issues:
-                    issues = f'{issues} e '
-                issues = f'{issues}tem tag <span>'
-            return issues
-
-        @staticmethod
-        def setting(question, setting, value=None):
-            if hasattr(CheckList.Check, setting):
-                if issues := eval(f'CheckList.Check.{setting}(question, value)'):
-                    return f'[{setting}] {issues}'
-            elif value is not None:
-                if issues := CheckList.Check.default(question, setting, value):
-                    return f'[{setting}] {issues}'
-            return None
-
-        @staticmethod
-        def tags(question, value):
-            tags = [test.text for test in question.findall('tags/tag/text')]
-            if num_tags := sum(tag.lower() in ('fácil', 'médio', 'difícil')
-                               for tag in tags):
-                if num_tags > 1:
-                    return 'múltiplos níveis de dificuldade'
-            else:
-                return 'nível de dificuldade ausente'
-
-        @staticmethod
-        def testcases(question, value):
-            def check(useasexample, mark_value, display_value, num_cases):
-                cases = [test for test in question.findall(
-                    f'testcases/testcase[@useasexample="{useasexample}"]')
-                    if test.find('display/text').text == display_value]
-
-                issues = ''
-                for t, test in enumerate(cases):
-                    if has_issue := (mark_value != test.attrib['mark']):
-                        if issues:
-                            issues = f'{issues}. '
-
-                        issues = (f'Caso {t} tem pontuação '
-                                  f'{test.attrib["mark"]} '
-                                  f'(deveria ser {mark_value})')
-
-                    display = test.find('display/text').text
-                    if display != display_value:
-                        issues = f'{issues} e' if has_issue else f'Caso {t}'
-                        issues = (f'{issues} tem visibilidade {display} '
-                                  f'(deveria ser "{display_value}")')
-
-                if len(cases) != num_cases:
-                    if useasexample == '1':
-                        test_type = 'exemplos'
-                    elif display_value == 'SHOW':
-                        test_type = 'visíveis'
-                    else:
-                        test_type = 'escondidos'
-                    issues = f'{issues} e são' if issues else 'São'
-                    issues = (f'{issues} {len(cases)} testes {test_type} '
-                              f'(deveriam ser {num_cases})')
-
-                return issues
-
-            issues = '. '.join(check(*value[case])
-                               for case in ('example', 'visible', 'hidden'))
-
-            return issues
+        return ''
 
     @staticmethod
-    def questions(file):
-        """Iterates through the questions in the given xml file.
+    def _coderunner_questions(file):
+        """Iterates through the questions in the given XML file.
 
-        Each item is the tuple (tree, question) for the quiz's ElementTree and
-        question Element).
+        Each item is the tuple (tree, category, question) for the quiz's
+        ElementTree and question's category and Element, respectively.
         """
 
-        tree = ET.parse(file)
+        tree, category = ET.parse(file), None
         for question in tree.getroot():
-            yield tree, question
+            # As per Moodle documentation: "Within the <quiz> tags are any
+            # number of <question> tags. One of these <question> tags can be a
+            # dummy question with a category type to specify a category for the
+            # import/export." Thus, all questions following a "category" type
+            # belong to that category in the question bank.
+            if question.get('type') == 'category':
+                category = question.find('category/text').text.replace(
+                    '$course$/top/', '')
+            elif (question.get('type') == 'coderunner' and
+                  question.find('prototypetype').text == '0'):
+                yield tree, category, question
 
     @staticmethod
-    def validate(file, values, sep='>'):
+    def validate(file, outfile=None, values=DEFAULTS, set_defaults=False,
+                 yes_to_all=False, sep=' > '):
         """Validates all questions in quiz file with the given setting values.
 
         Returns a boolean indicating if no issue was found. Also prints any
@@ -273,61 +255,56 @@ class CheckList():
 
         Args:
           - file: XML file with quiz/question info.
+          - outfile: string with the file to write the validated quiz to.
+                     (default: same as file)
           - values: dict in the {setting: value} format.
+          - set_defaults: boolean indicating whether to replace the
+                          non-default values with the default ones.
+                          (default: False)
+          - yes_to_all: boolean indicating whether to prompt user for
+                        confirmation for every issue found.
+                        (default: False)
           - sep: string for separating question category levels.
-        """
-        category, has_issues = None, False
-        for _, question in CheckList.questions(file):
-            # As per Moodle documentation: "Within the <quiz> tags are any
-            # number of <question> tags. One of these <question> tags can be a
-            # dummy question with a category type to specify a category for the
-            # import/export." Thus, all questions following a "category" type
-            # belong to that category in the question bank.
-            if CheckList._is_category(question):
-                category = CheckList._get_category(question)
-            elif CheckList._is_coderunner(question):
-                if not question.find('tags'):
-                    question.append(ET.Element('tags'))
-
-                name = question.find('name/text').text
-                for child in question:
-                    if issues := CheckList.Check.setting(question, child.tag,
-                                                         values.get(child.tag,
-                                                                    None)):
-                        has_issues = True
-                        print(f'{category}{sep}{name}: {issues}.')
-
-        return not has_issues
-
-    @staticmethod
-    def set_defaults(file, values, outfile=None):
-        """Sets the given values for all questions in the quiz file.
-
-        Returns a boolean indicating whether any issue was found. Also prints
-        any found issues (identifying the question).
-
-        Args:
-          - file: XML file with quiz/question info.
-          - values: dict in the {setting: value} format.
-          - outfile: string for output file. If not given, overwrites the given
-                     file.
+                 (default: ' > ')
         """
         if outfile is None:
-            print(f'Overwriting file "{file}".')
             outfile = file
 
-        category = None
-        for tree, question in CheckList.questions(file):
-            if CheckList._is_category(question):
-                category = CheckList._get_category(question)
-            elif CheckList._is_coderunner(question):
-                for child in question:
-                    CheckList.Fix.setting(category, question, child.tag,
-                                          values.get(child.tag, None))
+        has_issues = False
+        for tree, category, question in CheckList._coderunner_questions(file):
+            if not question.find('tags'):
+                question.append(ET.Element('tags'))
 
-                CheckList._add_CDATA(question)
+            name = question.find('name/text').text
+            for child in question:
+                setting, value = child.tag, values.get(child.tag, None)
+                issues = CheckList._check_setting(question, setting, value)
+
+                if issues:
+                    category, has_issues = category.replace("/", sep), True
+                    print(f'{category}{sep}{name}: {issues}.')
+
+                    if not set_defaults:
+                        continue
+
+                    set_default = yes_to_all
+                    if not yes_to_all:
+                        response = input('Tentar ajustar o valor de '
+                                         f'"{setting}" [Y/N]? ')
+                        set_default = response in 'yY'
+
+                    if set_default:
+                        issue = CheckList._fix_setting(category, question,
+                                                       setting, value, sep)
+                        if not issue:
+                            issue = f'"{setting}" ajustado!'
+                        print(f'\t{issue}')
+                    print()
+
+            CheckList._add_CDATA(question)
 
         tree.write(outfile, encoding='UTF-8', xml_declaration=True)
+        return not has_issues
 
 
 def __print_dict__(d, indent=''):
@@ -351,14 +328,14 @@ if __name__ == '__main__':
                         'unless the outfile is given.')
     parser.add_argument('-o', '--outfile',
                         help='Output file if overwriting any values.')
+    parser.add_argument('-y', '--yes_to_all', action='store_true',
+                        help='Answer YES to any iteractions.')
     args = parser.parse_args()
 
     if args.list_defaults:
         print('Default values:')
         __print_dict__(CheckList.DEFAULTS)
     else:
-        print('Validating values...\n')
-        is_valid = CheckList.validate(args.file, CheckList.DEFAULTS)
-        if args.set_defaults and not is_valid:
-            print('\nSetting default values...\n')
-            CheckList.set_defaults(args.file, CheckList.DEFAULTS, args.outfile)
+        CheckList.validate(args.file, args.outfile,
+                           set_defaults=args.set_defaults,
+                           yes_to_all=args.yes_to_all)
