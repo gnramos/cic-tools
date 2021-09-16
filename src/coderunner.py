@@ -38,7 +38,7 @@ class CheckList():
     UNFIXABLE = ['tags', 'testcases']
     DEFAULTS = {
         'coderunnertype': 'python3_try_except',
-        'defaultgrade': '1',
+        'defaultgrade': ['1.0000000', '1'],
         'displayfeedback': '0',  # [Set by quiz, Force Show, Force hide]
         'allornothing': '0',
         'penaltyregime': '0, 0, 10, 20, ...',
@@ -85,8 +85,13 @@ class CheckList():
 
     @staticmethod
     def _check_default(question, setting, default):
-        if (text := question.find(setting).text) == default:
+        text = question.find(setting).text
+        if text == default:
             return None
+        if isinstance(default, list):
+            if text in default:
+                return None
+            return f'é "{text}" (deveria estar em "{default}")'
         return f'é "{text}" (deveria ser "{default}")'
 
     @staticmethod
@@ -164,10 +169,10 @@ class CheckList():
 
             return issues
 
-        issues = '. '.join(check(*value[case])
-                           for case in ('example', 'visible', 'hidden'))
+        issues = [check(*value[case])
+                  for case in ('example', 'visible', 'hidden')]
 
-        return issues
+        return '. '.join(x for x in issues if x)
 
     @staticmethod
     def _clean_html(html):
