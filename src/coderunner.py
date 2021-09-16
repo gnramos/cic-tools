@@ -35,7 +35,7 @@ class CheckList():
     Uses a specific static method per setting, if available.
     """
 
-    UNFIXABLE = ['tags', 'testcases']
+    UNFIXABLE = ['tags', 'template', 'testcases']
     DEFAULTS = {
         'coderunnertype': 'python3_try_except',
         'defaultgrade': ['1.0000000', '1'],
@@ -72,16 +72,8 @@ class CheckList():
 
     @staticmethod
     def _check_coderunnertype(question, value):
-        question_type = question.find('coderunnertype').text
-        issues = ''
-        if question_type != 'python3_try_except':
-            issues = f'tipo de questão é {question_type}'
-        if question.find('template'):
-            if issues:
-                issues = f'{issues} e '
-            issues = f'{issues}já tem template de correção'
-
-        return issues
+        if (q_type := question.find('coderunnertype').text) != 'python3_try_except':
+            return f'tipo de questão é {q_type}'
 
     @staticmethod
     def _check_default(question, setting, default):
@@ -132,6 +124,11 @@ class CheckList():
                 return 'múltiplos níveis de dificuldade'
         else:
             return 'nível de dificuldade ausente'
+
+    @staticmethod
+    def _check_template(question, value=''):
+        if question.find('template').text:
+            return 'Já tem template de correção'
 
     @staticmethod
     def _check_testcases(question, value):
@@ -252,7 +249,7 @@ class CheckList():
 
     @staticmethod
     def validate(file, outfile=None, values=DEFAULTS, set_defaults=False,
-                 yes_to_all=False, sep=' > '):
+                 yes_to_all=False, ignore_templates=False, sep=' > '):
         """Validates all questions in quiz file with the given setting values.
 
         Returns a boolean indicating if no issue was found. Also prints any
@@ -263,11 +260,15 @@ class CheckList():
           - outfile: string with the file to write the validated quiz to.
                      (default: same as file)
           - values: dict in the {setting: value} format.
-          - set_defaults: boolean indicating whether to replace the
-                          non-default values with the default ones.
+                    (default: DEFAULTS)
+          - set_defaults: boolean indicating whether to replace the non-default
+                          values with the default ones.
                           (default: False)
           - yes_to_all: boolean indicating whether to prompt user for
                         confirmation for every issue found.
+                        (default: False)
+          - ignore_templates: boolean indicating whether to ignore the template
+                        code, if available.
                         (default: False)
           - sep: string for separating question category levels.
                  (default: ' > ')
@@ -283,8 +284,10 @@ class CheckList():
             name = question.find('name/text').text
             for child in question:
                 setting, value = child.tag, values.get(child.tag, None)
-                issues = CheckList._check_setting(question, setting, value)
+                if ignore_templates and setting == 'template':
+                    continue
 
+                issues = CheckList._check_setting(question, setting, value)
                 if issues:
                     category, has_issues = category.replace("/", sep), True
                     print(f'{category}{sep}{name}: {issues}.')
@@ -335,6 +338,8 @@ if __name__ == '__main__':
                         help='Output file if overwriting any values.')
     parser.add_argument('-y', '--yes_to_all', action='store_true',
                         help='Answer YES to any iteractions.')
+    parser.add_argument('-i', '--ignore_templates', action='store_true',
+                        help='Ignores question templates.')
     args = parser.parse_args()
 
     if args.list_defaults:
@@ -343,4 +348,5 @@ if __name__ == '__main__':
     else:
         CheckList.validate(args.file, args.outfile,
                            set_defaults=args.set_defaults,
-                           yes_to_all=args.yes_to_all)
+                           yes_to_all=args.yes_to_all,
+                           ignore_templates=args.ignore_templates)
