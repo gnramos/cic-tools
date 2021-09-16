@@ -249,7 +249,7 @@ class CheckList():
 
     @staticmethod
     def validate(file, outfile=None, values=DEFAULTS, set_defaults=False,
-                 yes_to_all=False, ignore_templates=False, sep=' > '):
+                 yes_to_all=False, ignore_list=[], sep=' > '):
         """Validates all questions in quiz file with the given setting values.
 
         Returns a boolean indicating if no issue was found. Also prints any
@@ -267,9 +267,8 @@ class CheckList():
           - yes_to_all: boolean indicating whether to prompt user for
                         confirmation for every issue found.
                         (default: False)
-          - ignore_templates: boolean indicating whether to ignore the template
-                        code, if available.
-                        (default: False)
+          - ignore_list: list fo settings (strings) to ignore.
+                        (default: [])
           - sep: string for separating question category levels.
                  (default: ' > ')
         """
@@ -284,7 +283,7 @@ class CheckList():
             name = question.find('name/text').text
             for child in question:
                 setting, value = child.tag, values.get(child.tag, None)
-                if ignore_templates and setting == 'template':
+                if setting in ignore_list:
                     continue
 
                 issues = CheckList._check_setting(question, setting, value)
@@ -338,8 +337,8 @@ if __name__ == '__main__':
                         help='Output file if overwriting any values.')
     parser.add_argument('-y', '--yes_to_all', action='store_true',
                         help='Answer YES to any iteractions.')
-    parser.add_argument('-i', '--ignore_templates', action='store_true',
-                        help='Ignores question templates.')
+    parser.add_argument('-i', '--ignore', nargs='*', default=[],
+                        help='Ignore given settings .')
     args = parser.parse_args()
 
     if args.list_defaults:
@@ -349,4 +348,4 @@ if __name__ == '__main__':
         CheckList.validate(args.file, args.outfile,
                            set_defaults=args.set_defaults,
                            yes_to_all=args.yes_to_all,
-                           ignore_templates=args.ignore_templates)
+                           ignore_list=args.ignore)
