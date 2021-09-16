@@ -106,7 +106,7 @@ class CheckList():
         questiontext = question.find('questiontext/text').text
         issues = ''
         if f'<h3>{name}</h3>' not in questiontext:
-            issues = 'não apresenta título'
+            issues = 'não apresenta título no formato previsto'
         if '<span' in questiontext:
             if issues:
                 issues = f'{issues} e '
@@ -207,14 +207,14 @@ class CheckList():
 
         # Handle regex characters.
         name = ''.join(f'\\{c}' if c in r'\{[()]}.' else c for c in name)
-        pattern = f'<h(\\d)>{name}</h\\d>'
+        pattern = f'<h(\\d)>(.*?)({name})(.*?)</h\\d>'
         if m := re.search(pattern, questiontext.text, flags=re.IGNORECASE):
-            if m.group(1) != '3':
-                questiontext.text = re.sub(f'<h(\\d)>{name}</h\\d>',
-                                           f'<h3>{name}</h3>',
-                                           questiontext.text)
-        else:
-            questiontext.text = f'<h3>{name}</h3>\n{questiontext.text}'
+            if (m.group(1) != '3' or
+                    any(p for p in m.group(2, 4)) or
+                    name != m.group(3)):
+                questiontext.text = re.sub(pattern, '', questiontext.text,
+                                           flags=re.IGNORECASE)
+        questiontext.text = f'<h3>{name}</h3>\n{questiontext.text.lstrip()}'
 
     @staticmethod
     def _fix_setting(category, question, setting, value, sep=' > '):
@@ -302,7 +302,7 @@ class CheckList():
                         issue = CheckList._fix_setting(category, question,
                                                        setting, value, sep)
                         if not issue:
-                            issue = f'"{setting}" ajustado!'
+                            issue = f'[{setting}] ajustado!'
                         print(f'\t{issue}')
                     print()
 
