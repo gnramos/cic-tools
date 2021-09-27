@@ -41,10 +41,13 @@ class Grades(utils.Students):
                 grades_idx = range(6, len(header) - 1)
 
             for row in csvreader:
-                s_id = row[5].split('@')[0]
+                s_id = row[5].split('@')[0]  # e-mail
                 self[s_id] = {'Name': f'{row[0]} {row[1]}'}
                 for i in grades_idx:
-                    self[s_id][header[i]] = 0 if row[i] == '-' else float(row[i])
+                    if row[i] == '-':
+                        self[s_id][header[i]] = 0
+                    else:
+                        self[s_id][header[i]] = float(row[i].replace(',', '.'))
 
 
 class Participants(utils.Students):
@@ -118,79 +121,122 @@ class Progress(utils.Students):
                               'Faltas': 100 - frequency}
 
 
-class Responses(utils.Students):
-    """Processa o relatório de respostas de um questionário.
+class Quiz():
+    class Grades(utils.Students):
+        def __init__(self, file):
+            """Construtor.
 
-    Acrescenta "Quiz", um dicionário cujas chaves são índices das questões no
-    questionário e os valores outro dicionário com duas chaves: 'attempt' que
-    define a resposta do discente e 'answer' que define a resposta correta.
+            Carrega os dados do arquivo.
 
-    Para obter o arquivo:
-        1. Acesse o relatório via:
-            Questionário > Configurações (engrenagem) > Respostas
-        2. Selecione o grupo desejado, se for o caso.
-        3. Selecione as 'Tentativas que estão' 'Finalizada'.
-        4. Mostre apenas 'resposta' e 'resposta correta'.
-        5. Mostre o relatório.
-        6. Faça download do arquivo no formato JSON (UTF-8 .json).
-    """
+            Argumentos:
+            file -- o arquivo CSV a ser lido.
+            """
 
-    def __init__(self, file):
-        """Construtor.
+            def grade(value, weight):
+                if value == '-':
+                    return 0
 
-        Carrega os dados do arquivo.
+                value = float(value.replace(',', '.'))
+                if weight == '1,00':
+                    return value
+                return value / float(weight.replace(',', '.'))
 
-        Argumentos:
-        file -- o arquivo JSON a ser lido.
+            def skip_last(iterator):
+
+                prev = next(iterator)
+                for item in iterator:
+                    yield prev
+                    prev = item
+
+            quiz = file.split('.')[-2]
+
+            with open(file) as csvfile:
+                csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
+
+                header = [q.split(' /') for q in next(csvreader)]  # skip header
+                # weight = float(header[7].split('/')[-1].replace(',', '.'))
+                # 8  is the first grade, last column is "last download" info
+                grades_idx = range(8, len(header))
+
+                for row in skip_last(csvreader):
+                    s_id = row[2].split('@')[0]  # e-mail
+                    self[s_id] = {'Name': f'{row[1]} {row[0]}',
+                                  'Quiz': {quiz: [grade(row[i], header[i][1])
+                                                  for i in grades_idx]}}
+
+    class Responses(utils.Students):
+        """Processa o relatório de respostas de um questionário.
+
+        Acrescenta "Quiz", um dicionário cujas chaves são índices das questões no
+        questionário e os valores outro dicionário com duas chaves: 'attempt' que
+        define a resposta do discente e 'answer' que define a resposta correta.
+
+        Para obter o arquivo:
+            1. Acesse o relatório via:
+                Questionário > Configurações (engrenagem) > Respostas
+            2. Selecione o grupo desejado, se for o caso.
+            3. Selecione as 'Tentativas que estão' 'Finalizada'.
+            4. Mostre apenas 'resposta' e 'resposta correta'.
+            5. Mostre o relatório.
+            6. Faça download do arquivo no formato JSON (UTF-8 .json).
         """
 
-        with open(file) as f:
-            data = json.load(f)
+        def __init__(self, file):
+            """Construtor.
 
-        for d in data[0]:
-            s_id, _ = d[2].split('@')
-            self[s_id] = {'Name': f'{d[1]} {d[0]}',
-                          'Quiz': {q: {'attempt': d[i].strip(' \r\n'),
-                                       'answer': d[i + 1].strip(' \r\n')}
-                                   for q, i in enumerate(range(8, len(d), 2))}}
+            Carrega os dados do arquivo.
 
-    def _make_header(self, student_info, ext):
-        if ext == 'py':
-            return '\n'.join(f'# {i}' for i in student_info)
+            Argumentos:
+            file -- o arquivo JSON a ser lido.
+            """
 
-        if ext in ['c', 'cpp']:
-            cmt = '\n   '.join(student_info)
-            return f'/* {cmt} */'
+            with open(file) as f:
+                data = json.load(f)
 
-        return ' '.join(student_info)
+            for d in data[0]:
+                s_id, _ = d[2].split('@')
+                self[s_id] = {'Name': f'{d[1]} {d[0]}',
+                              'Quiz': {q: {'attempt': d[i].strip(' \r\n'),
+                                           'answer': d[i + 1].strip(' \r\n')}
+                                       for q, i in enumerate(range(8, len(d), 2))}}
 
-    def _has_response(self, content):
-        return content.count('\n') > 1
+        def _make_header(self, student_info, ext):
+            if ext == 'py':
+                return '\n'.join(f'# {i}' for i in student_info)
 
-    def to_files(self, path, ext='py', ignore=[]):
-        """Grava cada resposta em um arquivo específico.
+            if ext in ['c', 'cpp']:
+                cmt = '\n   '.join(student_info)
+                return f'/* {cmt} */'
 
-        Argumentos:
-        path -- diretório para armazenar os arquivos.
-        ext -- extensão do arquivo a conter a resposta.
-        ignore -- lista com índices de questões que devem ser ignoradas.
-        """
+            return ' '.join(student_info)
 
-        for s_id, info in self.items():
-            student_info = [info["Name"], f'{s_id}']
-            header = f'{self._make_header(student_info, ext)}\n\n'
+        def _has_response(self, content):
+            return content.count('\n') > 1
 
-            for q, src in info['Quiz'].items():
-                if (q not in ignore and
-                        self._has_response(src.get('attempt', ''))):
-                    q_dir = os.path.join(path, f'Q{q}')
-                    os.makedirs(q_dir, exist_ok=True)
-                    response_file = os.path.join(q_dir,
-                                                 f'{s_id}.{ext}')
-                    with open(response_file, 'w') as f:
-                        f.write(f'{header}\n\n{src["attempt"]}')
+        def to_files(self, path, ext='py', ignore=[]):
+            """Grava cada resposta em um arquivo específico.
 
-                    response_file = os.path.join(q_dir, f'CORRECT.{ext}')
-                    if not os.path.isfile(response_file):
+            Argumentos:
+            path -- diretório para armazenar os arquivos.
+            ext -- extensão do arquivo a conter a resposta.
+            ignore -- lista com índices de questões que devem ser ignoradas.
+            """
+
+            for s_id, info in self.items():
+                student_info = [info["Name"], f'{s_id}']
+                header = f'{self._make_header(student_info, ext)}\n\n'
+
+                for q, src in info['Quiz'].items():
+                    if (q not in ignore and
+                            self._has_response(src.get('attempt', ''))):
+                        q_dir = os.path.join(path, f'Q{q}')
+                        os.makedirs(q_dir, exist_ok=True)
+                        response_file = os.path.join(q_dir,
+                                                     f'{s_id}.{ext}')
                         with open(response_file, 'w') as f:
-                            f.write(src['answer'])
+                            f.write(f'{header}\n\n{src["attempt"]}')
+
+                        response_file = os.path.join(q_dir, f'CORRECT.{ext}')
+                        if not os.path.isfile(response_file):
+                            with open(response_file, 'w') as f:
+                                f.write(src['answer'])
