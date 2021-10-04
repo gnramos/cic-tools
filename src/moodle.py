@@ -213,17 +213,20 @@ class Quiz():
         def _has_response(self, content):
             return content.count('\n') > 1
 
-        def to_files(self, path, ext='py', ignore=[]):
+        def to_files(self, path, ext='py', ignore=[], participants={}):
             """Grava cada resposta em um arquivo específico.
 
             Argumentos:
             path -- diretório para armazenar os arquivos.
             ext -- extensão do arquivo a conter a resposta.
             ignore -- lista com índices de questões que devem ser ignoradas.
+            participants -- dicionário com a informação de turma (veja class
+                            Participants)
             """
 
             for s_id, info in self.items():
-                student_info = [info["Name"], f'{s_id}']
+                group = participants.get(s_id, {}).get('Group', '?')
+                student_info = [info['Name'], s_id, group]
                 header = f'{self._make_header(student_info, ext)}\n\n'
 
                 for q, src in info['Quiz'].items():
