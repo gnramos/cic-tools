@@ -142,7 +142,6 @@ class Quiz():
                 return value / float(weight.replace(',', '.'))
 
             def skip_last(iterator):
-
                 prev = next(iterator)
                 for item in iterator:
                     yield prev
@@ -189,6 +188,7 @@ class Quiz():
             Argumentos:
             file -- o arquivo JSON a ser lido.
             """
+            quiz = file.split('.')[-2]
 
             with open(file) as f:
                 data = json.load(f)
@@ -196,9 +196,9 @@ class Quiz():
             for d in data[0]:
                 s_id, _ = d[2].split('@')
                 self[s_id] = {'Name': f'{d[1]} {d[0]}',
-                              'Quiz': {q: {'attempt': d[i].strip(' \r\n'),
-                                           'answer': d[i + 1].strip(' \r\n')}
-                                       for q, i in enumerate(range(8, len(d), 2))}}
+                              quiz: {q: {'attempt': d[i].strip(' \r\n'),
+                                         'answer': d[i + 1].strip(' \r\n')}
+                                     for q, i in enumerate(range(8, len(d), 2))}}
 
         def _make_header(self, student_info, ext):
             if ext == 'py':
@@ -213,23 +213,28 @@ class Quiz():
         def _has_response(self, content):
             return content.count('\n') > 1
 
-        def to_files(self, path, ext='py', ignore=[], participants={}):
+        def to_files(self, path, ext='py', ignore=[], student_info={}):
             """Grava cada resposta em um arquivo específico.
+
+            Sendo fornecida a informação, inclui turma do aluno e nota da
+            questão no cabeçalho do arquivo.
 
             Argumentos:
             path -- diretório para armazenar os arquivos.
             ext -- extensão do arquivo a conter a resposta.
             ignore -- lista com índices de questões que devem ser ignoradas.
-            participants -- dicionário com a informação de turma (veja class
-                            Participants)
+            student_info -- dicionário com a informação adicional de alunos
+                            (veja as classes Participants e Quiz.Grades)
             """
-
             for s_id, info in self.items():
-                group = participants.get(s_id, {}).get('Group', '?')
-                student_info = [info['Name'], s_id, group]
-                header = f'{self._make_header(student_info, ext)}\n\n'
+                group = student_info.get(s_id, {}).get('Group', 'Turma ?')
+                quiz = [k for k in info.keys() if k != 'Name'][0]
+                grades = student_info.get(s_id, {}).get('Quiz', {}).get(quiz, {})
+                for q, src in info[quiz].items():
+                    grade = int(100 * grades[int(q)])
+                    student = [info['Name'], s_id, group, f'Nota: {grade}/100']
+                    header = f'{self._make_header(student, ext)}'
 
-                for q, src in info['Quiz'].items():
                     if (q not in ignore and
                             self._has_response(src.get('attempt', ''))):
                         q_dir = os.path.join(path, f'Q{q}')
