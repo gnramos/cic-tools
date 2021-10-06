@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import re
+import unicodedata
 import utils
 
 
@@ -31,7 +32,8 @@ class Grades(utils.Students):
         with open(file) as csvfile:
             csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
 
-            header = next(csvreader)  # skip header
+            header = [unicodedata.normalize('NFKD', h)
+                      for h in next(csvreader)]  # skip header
             if total_only:
                 grades_idx = [i for i, col in enumerate(header)
                               if col.endswith(' total (Real)')]
@@ -42,12 +44,10 @@ class Grades(utils.Students):
 
             for row in csvreader:
                 s_id = row[5].split('@')[0]  # e-mail
-                self[s_id] = {'Name': f'{row[0]} {row[1]}'}
+                self[s_id] = {'Name': f'{row[0]} {row[1]}', 'Grades': {}}
                 for i in grades_idx:
-                    if row[i] == '-':
-                        self[s_id][header[i]] = 0
-                    else:
-                        self[s_id][header[i]] = float(row[i].replace(',', '.'))
+                    grade = 0 if row[i] == '-' else float(row[i].replace(',', '.'))
+                    self[s_id]['Grades'][header[i]] = grade
 
 
 class Participants(utils.Students):
