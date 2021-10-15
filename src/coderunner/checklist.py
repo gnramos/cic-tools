@@ -353,10 +353,12 @@ def check(file, values, outfile=None, set_values=False,
     return all_valid
 
 
-if __name__ == '__main__':
-    import argparse
+def main():
+    """Processa argumentos da linha de comando."""
 
-    parser = argparse.ArgumentParser()
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
     parser.add_argument('file', help='Quiz XML file.')
     parser.add_argument('-l', '--list_values', action='store_true',
                         help='List suggested values and exit.')
@@ -376,3 +378,7 @@ if __name__ == '__main__':
     else:
         check(args.file, DEFAULTS, args.outfile, set_values=args.set_values,
               yes_to_all=args.yes_to_all, ignore_list=args.ignore)
+
+
+if __name__ == '__main__':
+    main()
