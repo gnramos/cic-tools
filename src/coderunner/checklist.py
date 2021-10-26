@@ -373,7 +373,7 @@ def main():
     parser.add_argument('-o', '--outfile',
                         help='Output file name.')
     parser.add_argument('-y', '--yes_to_all', action='store_true',
-                        help='Answer YES to any iteractions.')
+                        help='Answer YES to any interactions.')
     parser.add_argument('-i', '--ignore', nargs='*', default=[],
                         help='Ignore given settings.')
     args = parser.parse_args()
