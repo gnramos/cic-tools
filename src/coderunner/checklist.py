@@ -1,3 +1,9 @@
+"""Verificação da configuração de questões do CodeRunner em comparação à
+valores esperados, possibilitando o ajuste automático de algumas.
+
+Detalhes em: https://github.com/trampgeek/moodle-qtype_coderunner
+"""
+
 import re
 import xml.etree.ElementTree as ET
 
