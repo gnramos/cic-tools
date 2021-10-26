@@ -10,26 +10,38 @@ import os
 import re
 
 
-def call(shell_options, verbose=True):
+def call(shell_options, path='.', ext='py', verbose=True):
     """Chama o script moss e retorna a url resultante, se for bem sucedido.
 
     As opções devem, obrigatoriamente, definir os arquivos a serem avaliados.
 
     Argumentos:
     shell_options -- opções a serem fornecidas ao script.
+    path -- diretório onde estão os arquivos para serem analisados
+            (default '.')
+    ext -- extensão do tipo de arquivo a ser analisado
+           (default 'py')
     verbose -- booleano indicando se há exibição dos resultados na saída padrão
                ou não (default True)
     """
 
     import subprocess
 
-    shell_cmd = ' '.join(['moss'] + shell_options)
-    cp = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE)
+    working_dir = os.getcwd()
+    os.chdir(path)
+    try:
+        shell_cmd = ' '.join(['moss'] + shell_options + [f'*.{ext}'])
+        cp = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE)
 
-    if verbose:
-        print(cp.stdout.decode())
+        if verbose:
+            print(cp.stdout.decode())
 
-    url = cp.stdout.decode().split('\n')[-2]
+        url = cp.stdout.decode().split('\n')[-2]
+    except Exception:
+        url = ''
+    finally:
+        os.chdir(working_dir)
+
     return url if url.startswith('http') else None
 
 
