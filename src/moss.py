@@ -10,7 +10,7 @@ import os
 import re
 
 
-def call(shell_options, path='.', ext='py', verbose=True):
+def call(shell_options, path='.', ext='py'):
     """Chama o script moss e retorna a url resultante, se for bem sucedido.
 
     As opções devem, obrigatoriamente, definir os arquivos a serem avaliados.
@@ -21,8 +21,6 @@ def call(shell_options, path='.', ext='py', verbose=True):
             (default '.')
     ext -- extensão do tipo de arquivo a ser analisado
            (default 'py')
-    verbose -- booleano indicando se há exibição dos resultados na saída padrão
-               ou não (default True)
     """
 
     import subprocess
@@ -32,9 +30,6 @@ def call(shell_options, path='.', ext='py', verbose=True):
     try:
         shell_cmd = ' '.join(['moss'] + shell_options + [f'*.{ext}'])
         cp = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE)
-
-        if verbose:
-            print(cp.stdout.decode())
 
         url = cp.stdout.decode().split('\n')[-2]
     except Exception:
@@ -85,6 +80,9 @@ def similar(moss_report, threshold=30):
         _, tail = os.path.split(moss_report)
         name, _ = os.path.splitext(tail)
         return name
+
+    if not os.path.isfile(moss_report):
+        return []
 
     with open(moss_report, 'r') as f:
         moss_html = f.read()
