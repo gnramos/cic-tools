@@ -11,6 +11,7 @@ Para obter o arquivo:
 Apenas o arquivo HTML é necessário.
 """
 
+from argparse import ArgumentParser
 import re
 
 
@@ -20,33 +21,34 @@ def read(file, group='', role='Estudante'):
     Argumentos:
     file -- o arquivo HTML a ser lido.
     group -- nome [parcial] do grupo desejado.
-    role -- papel definido (Estudante | Estudante-Monitor | Professor).
+    role -- papel [parcial] definido.
             (default Estudante)
     """
     with open(file) as htmlfile:
         html = htmlfile.read()
 
     pattern = re.compile(r'<label for=.*?user\d+.*?<img.*?>(.*?)</a>.*?'
-                         r'>(\w*?@unb.br|\d+@aluno\.unb\.br)[.\s\S]*?'
+                         r'>([\d\w]*?)@(aluno\.)?unb\.br[.\s\S]*?'
                          r'"Atribuições de papéis.*?>[\s\S] *(\w.*)[\s\S]'
                          r'[.\s\S]*?'
                          r'"Editar grupos.*?>[\s\S] *(\w.*)[\s\S]')
     return {s_id: {'Name': name, 'Role': s_role, 'Group': s_group}
-            for name, s_id, s_role, s_group in pattern.findall(html)
-            if group in s_group and role == s_role}
+            for name, s_id, is_aluno, s_role, s_group in pattern.findall(html)
+            if group in s_group and role in s_role}
+
+
+def parser_add_argument(parser):
+    parser.add_argument('-g', '--group', default='',
+                        help='Nome [parcial] do grupo desejado.')
+    parser.add_argument('-r', '--role', default='',
+                        help='Nome [parcial] do papel desejado.')
 
 
 def main():
     """Processa argumentos da linha de comando."""
-
-    from argparse import ArgumentParser
-
     parser = ArgumentParser(read.__doc__.split('\n')[0])
     parser.add_argument('file', help='O arquivo HTML a ser lido.')
-    parser.add_argument('-g', '--group', default='',
-                        help='Nome [parcial] do grupo desejado.')
-    parser.add_argument('-r', '--role', default='Estudante',
-                        help='Nome [parcial] do papel desejado.')
+    parser_add_argument(parser)
 
     args = parser.parse_args()
     participants = read(args.file, args.group, args.role)
