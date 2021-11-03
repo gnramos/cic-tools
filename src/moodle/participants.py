@@ -14,24 +14,26 @@ Apenas o arquivo HTML é necessário.
 import re
 
 
-def read(file, group=''):
+def read(file, group='', role='Estudante'):
     """Lê os dados do arquivo e os retorna como um dicionário.
 
     Argumentos:
     file -- o arquivo HTML a ser lido.
     group -- nome [parcial] do grupo desejado.
+    role -- papel definido (Estudante | Estudante-Monitor | Professor).
+            (default Estudante)
     """
-
     with open(file) as htmlfile:
         html = htmlfile.read()
 
     pattern = re.compile(r'<label for=.*?user\d+.*?<img.*?>(.*?)</a>.*?'
-                         r'(\d+)@aluno.unb.br[.\s\S]*?'
-                         r'title="Editar grupos.*?>[\s\S]'
-                         r' *(\w.*)[\s\S]')
-    return {s_id: {'Name': name, 'Group': s_group}
-            for name, s_id, s_group in pattern.findall(html)
-            if group in s_group}
+                         r'>(\w*?@unb.br|\d+@aluno\.unb\.br)[.\s\S]*?'
+                         r'"Atribuições de papéis.*?>[\s\S] *(\w.*)[\s\S]'
+                         r'[.\s\S]*?'
+                         r'"Editar grupos.*?>[\s\S] *(\w.*)[\s\S]')
+    return {s_id: {'Name': name, 'Role': s_role, 'Group': s_group}
+            for name, s_id, s_role, s_group in pattern.findall(html)
+            if group in s_group and role == s_role}
 
 
 def main():
@@ -43,16 +45,18 @@ def main():
     parser.add_argument('file', help='O arquivo HTML a ser lido.')
     parser.add_argument('-g', '--group', default='',
                         help='Nome [parcial] do grupo desejado.')
+    parser.add_argument('-r', '--role', default='Estudante',
+                        help='Nome [parcial] do papel desejado.')
 
     args = parser.parse_args()
-    participants = read(args.file, args.group)
+    participants = read(args.file, args.group, args.role)
 
     import locale
 
     locale.setlocale(locale.LC_ALL, '')
     for info in sorted(participants.values(),
                        key=lambda x: locale.strxfrm(x['Name'].lower())):
-        print(f'{info["Name"]}: {info["Group"]}')
+        print(f'{info["Name"]}: {info["Group"]} ({info["Role"]})')
 
 
 if __name__ == '__main__':
