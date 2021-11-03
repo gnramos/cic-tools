@@ -45,6 +45,7 @@ def write(responses, output_path, ext='py', ignore=[], header_extra={}):
     Cria uma estrutura de diretórios criada para armazenar os arquivos que
     segue as hierarquia das chaves do dicionário de respostas:
         output_path > Nome do Questionário > Questão
+
     Retorna uma lista com os diretórios (um por questão) onde os arquivos são
     gravados.
 
