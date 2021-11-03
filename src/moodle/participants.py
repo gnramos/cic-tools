@@ -46,7 +46,12 @@ def main():
 
     args = parser.parse_args()
     participants = read(args.file, args.group)
-    for info in sorted(participants.values(), key=lambda x: x['Name']):
+
+    import locale
+
+    locale.setlocale(locale.LC_ALL, '')
+    for info in sorted(participants.values(),
+                       key=lambda x: locale.strxfrm(x['Name'].lower())):
         print(f'{info["Name"]}: {info["Group"]}')
 
 
