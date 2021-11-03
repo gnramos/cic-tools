@@ -12,7 +12,7 @@ Para obter o arquivo:
 import csv
 
 
-def read(file):
+def read(file, info):
     """Lê os dados do arquivo e os retorna como um dicionário.
 
     Argumentos:
