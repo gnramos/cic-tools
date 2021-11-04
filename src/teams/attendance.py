@@ -8,11 +8,12 @@ Para obter o arquivo:
 import csv
 
 
-def read(file, students_only=True):
+def read(file, info, students_only=True):
     """Lê os dados do arquivo e os retorna como um dicionário.
 
     Argumentos:
     file -- o arquivo CSV a ser lido.
+    info -- string descrevendo o arquivo.
     students_only -- booleano indicando se considera apenas as notas
                      consolidadas (total).
     """
@@ -37,6 +38,7 @@ def main():
     """Processa argumentos da linha de comando."""
 
     from argparse import ArgumentParser
+    import locale
 
     parser = ArgumentParser(read.__doc__.split('\n')[0])
     parser.add_argument('files', nargs='+', help='Arquivos CSV a serem lidos.')
@@ -45,16 +47,18 @@ def main():
 
     args = parser.parse_args()
 
+    locale.setlocale(locale.LC_ALL, '')
     attendance, num_files = {}, 0
     for file in args.files:
-        if att := read(file, args.students_only):
+        if att := read(file, None, args.students_only):
             for s_id, info in att.items():
                 if s_id not in attendance:
                     attendance[s_id] = {'Name': info['Name'], 'Attendance': 0}
                 attendance[s_id]['Attendance'] += 1
             num_files += 1
-    for info in sorted(attendance.values(), key=lambda x: x['Name']):
-        print(f'{info["Name"]} {100 * info["Attendance"] // num_files}%')
+    for info in sorted(attendance.values(),
+                       key=lambda x: locale.strxfrm(x['Name'])):
+        print(f'{info["Name"]},{100 * info["Attendance"] // num_files}')
 
 
 if __name__ == '__main__':
