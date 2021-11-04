@@ -39,13 +39,17 @@ def main():
     """Processa argumentos da linha de comando."""
 
     from argparse import ArgumentParser
+    import locale
 
     parser = ArgumentParser(read.__doc__.split('\n')[0])
     parser.add_argument('file', help='O arquivo CSV a ser lido.')
 
     args = parser.parse_args()
     progress = read(args.file, None)
-    for info in sorted(progress.values(), key=lambda x: x['Name']):
+
+    locale.setlocale(locale.LC_ALL, '')
+    for info in sorted(progress.values(),
+                       key=lambda x: locale.strxfrm(x['Name']).lower()):
         print(f'{info["Name"]}, Frequência: {info["Frequência"]}, '
               f'Faltas: {info["Faltas"]}')
 
