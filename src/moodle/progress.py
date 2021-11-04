@@ -44,7 +44,7 @@ def main():
     parser.add_argument('file', help='O arquivo CSV a ser lido.')
 
     args = parser.parse_args()
-    progress = read(args.file,)
+    progress = read(args.file, None)
     for info in sorted(progress.values(), key=lambda x: x['Name']):
         print(f'{info["Name"]}, Frequência: {info["Frequência"]}, '
               f'Faltas: {info["Faltas"]}')
