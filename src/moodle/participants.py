@@ -11,7 +11,6 @@ Para obter o arquivo:
 Apenas o arquivo HTML é necessário.
 """
 
-from argparse import ArgumentParser
 import re
 
 
@@ -37,18 +36,17 @@ def read(file, group='', role='Estudante'):
             if group in s_group and role in s_role}
 
 
-def parser_add_argument(parser):
+def main():
+    """Processa argumentos da linha de comando."""
+
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(read.__doc__.split('\n')[0])
+    parser.add_argument('file', help='O arquivo HTML a ser lido.')
     parser.add_argument('-g', '--group', default='',
                         help='Nome [parcial] do grupo desejado.')
     parser.add_argument('-r', '--role', default='',
                         help='Nome [parcial] do papel desejado.')
-
-
-def main():
-    """Processa argumentos da linha de comando."""
-    parser = ArgumentParser(read.__doc__.split('\n')[0])
-    parser.add_argument('file', help='O arquivo HTML a ser lido.')
-    parser_add_argument(parser)
 
     args = parser.parse_args()
     participants = read(args.file, args.group, args.role)
