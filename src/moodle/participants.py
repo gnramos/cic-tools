@@ -55,7 +55,7 @@ def main():
 
     locale.setlocale(locale.LC_ALL, '')
     for info in sorted(participants.values(),
-                       key=lambda x: locale.strxfrm(x['Name'].lower())):
+                       key=lambda x: locale.strxfrm(x['Name'])):
         print(f'{info["Name"]}: {info["Group"]} ({info["Role"]})')
 
 

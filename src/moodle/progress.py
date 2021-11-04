@@ -49,7 +49,7 @@ def main():
 
     locale.setlocale(locale.LC_ALL, '')
     for info in sorted(progress.values(),
-                       key=lambda x: locale.strxfrm(x['Name']).lower()):
+                       key=lambda x: locale.strxfrm(x['Name'])):
         print(f'{info["Name"]}, Frequência: {info["Frequência"]}, '
               f'Faltas: {info["Faltas"]}')
 
