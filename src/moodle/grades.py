@@ -12,7 +12,6 @@ Para obter o arquivo:
     6. Selecione o formato de exportação "Real" com separador "Vírgula".
 """
 
-from argparse import ArgumentParser
 import csv
 import unicodedata
 
@@ -53,20 +52,22 @@ def read(file, total_only=False):
     return grades
 
 
-def parser_add_argument(parser):
+def main():
+    """Processa argumentos da linha de comando."""
+
+    from argparse import ArgumentParser
+    import locale
+
+    parser = ArgumentParser(read.__doc__.split('\n')[0])
+    parser.add_argument('file', help='O arquivo CSV a ser lido.')
     parser.add_argument('-t', '--total_only', action='store_true',
                         help='Considerar apenas notas consolidadas (total).')
 
-
-def main():
-    """Processa argumentos da linha de comando."""
-    parser = ArgumentParser(read.__doc__.split('\n')[0])
-    parser.add_argument('file', help='O arquivo CSV a ser lido.')
-    parser_add_argument(parser)
-
     args = parser.parse_args()
     grades = read(args.file, args.total_only)
-    for info in sorted(grades.values(), key=lambda x: x['Name']):
+
+    locale.setlocale(locale.LC_ALL, '')
+    for info in sorted(grades.values(), key=lambda x: locale.strxfrm(x['Name']).lower()):
         print(info['Name'])
         for quiz, grade in info['Grades'].items():
             print(f'\t{quiz}: {grade}')
