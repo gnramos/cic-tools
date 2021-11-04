@@ -107,18 +107,18 @@ def similar(moss_report, threshold=30):
 def main():
     """Processa argumentos da linha de comando."""
 
-    from argparse import ArgumentParser
-
-    def parse_report():
+    def parse_report(args):
         if get_report(args.url, args.out_file):
             print(f'Relatório armazenado em {args.out_file}.')
         else:
             print(f'Houve um problema obtendo o relatório de {args.url}.')
 
-    def parse_similar():
+    def parse_similar(args):
         groups = similar(args.report, args.threshold)
         for i, group in enumerate(groups):
             print(f'Grupo {i + 1}): ' + ', '.join(sorted(group)))
+
+    from argparse import ArgumentParser
 
     parser = ArgumentParser()
     subparsers = parser.add_subparsers(help='Opções de comandos.')
@@ -139,7 +139,7 @@ def main():
     similar_parser.set_defaults(func=parse_similar)
 
     args = parser.parse_args()
-    args.func()
+    args.func(args)
 
 
 if __name__ == '__main__':
