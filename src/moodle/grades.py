@@ -67,7 +67,8 @@ def main():
     grades = read(args.file, args.total_only)
 
     locale.setlocale(locale.LC_ALL, '')
-    for info in sorted(grades.values(), key=lambda x: locale.strxfrm(x['Name']).lower()):
+    for info in sorted(grades.values(),
+                       key=lambda x: locale.strxfrm(x['Name']).lower()):
         print(info['Name'])
         for quiz, grade in info['Grades'].items():
             print(f'\t{quiz}: {grade}')
