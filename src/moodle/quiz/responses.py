@@ -10,6 +10,7 @@ Para obter o arquivo:
     6. Faça download do arquivo no formato JSON (UTF-8 .json).
 """
 
+from argparse import ArgumentParser
 import os
 
 
@@ -104,23 +105,27 @@ def write(responses, output_path, ext='py', ignore=[], header_extra={}):
 def main():
     """Processa argumentos da linha de comando."""
 
-    from argparse import ArgumentParser
+    def parse_read(args):
+        import locale
 
-    def parse_read():
-        responses = read(args.file, args.quiz)
-        for s_id in responses:
-            print(s_id)
+        locale.setlocale(locale.LC_ALL, '')
+        responses = read(args.file, ' '.join(args.quiz))
+        for s_id, info in sorted(responses.items(),
+                                 key=lambda x: locale.strxfrm(x[1]['Name'])):
+            quizzes = ', '.join(key for key in info if key != 'Name')
+            print(f'{info["Name"]} ({s_id}): {quizzes}')
 
-    def parse_write():
+    def parse_write(args):
         responses = read(args.file, args.quiz)
-        print(args.output_path, args.ext, args.ignore)
         for path in write(responses, args.output_path, args.ext, args.ignore):
             print(path)
 
     parser = ArgumentParser(read.__doc__.split('\n')[0])
     parser.add_argument('file', help='O arquivo JSON a ser lido.')
-    parser.add_argument('-q', '--quiz', default='Questionário',
+    parser.add_argument('-q', '--quiz', nargs='+', default=['Questionário'],
                         help='O nome do questionário.')
+    parser.set_defaults(func=parse_read)
+
     subparsers = parser.add_subparsers(help='Opções de comandos.')
     write_parser = subparsers.add_parser('write',
                                          help=write.__doc__.split('\n')[0])
@@ -134,7 +139,7 @@ def main():
     write_parser.set_defaults(func=parse_write)
 
     args = parser.parse_args()
-    args.func()
+    args.func(args)
 
 
 if __name__ == '__main__':
