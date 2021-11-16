@@ -8,26 +8,24 @@ Para obter o arquivo:
 import csv
 
 
-def read(file, info, students_only=True):
+def read(file, info):
     """Lê os dados do arquivo e os retorna como um dicionário.
 
     Argumentos:
     file -- o arquivo CSV a ser lido.
     info -- string descrevendo o arquivo.
-    students_only -- booleano indicando se considera apenas as notas
-                     consolidadas (total).
     """
     attendance = {}
 
-    with open(file, encoding='utf-16') as csvfile:
+    # with open(file, encoding='utf-16') as csvfile:
+    with open(file, encoding='utf-16-le') as csvfile:
         csvreader = csv.reader(csvfile, delimiter='\t')
         try:
             while ['Full Name'] != next(csvreader)[:1]:
                 pass
             for row in csvreader:
                 name, s_id = row[0], row[4].split('@')[0]
-                if not students_only or s_id.isdigit():
-                    attendance[s_id] = {'Name': name}
+                attendance[s_id] = {'Name': name}
         except StopIteration:
             pass
 
@@ -50,15 +48,17 @@ def main():
     locale.setlocale(locale.LC_ALL, '')
     attendance, num_files = {}, 0
     for file in args.files:
-        if att := read(file, None, args.students_only):
+        if att := read(file, None):
             for s_id, info in att.items():
-                if s_id not in attendance:
-                    attendance[s_id] = {'Name': info['Name'], 'Attendance': 0}
-                attendance[s_id]['Attendance'] += 1
+                if not args.students_only or s_id.isdigit():
+                    if s_id not in attendance:
+                        attendance[s_id] = {'Name': info['Name'],
+                                            'Attendance': 0}
+                    attendance[s_id]['Attendance'] += 1
             num_files += 1
     for info in sorted(attendance.values(),
                        key=lambda x: locale.strxfrm(x['Name'])):
-        print(f'{info["Name"]},{100 * info["Attendance"] // num_files}')
+        print(f'{info["Name"]},{100 * info["Attendance"] // num_files}%')
 
 
 if __name__ == '__main__':
