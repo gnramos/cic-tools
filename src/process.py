@@ -137,7 +137,8 @@ def _make_csv(reports, output, num_classes, sep):
     def students_by_groups():
         groups = defaultdict(list)
         for id, info in reports['participants'].items():
-            groups[info['Group']].append(id)
+            if reports['participants'][id]['Role'] == 'Estudante':
+                groups[info['Group']].append(id)
         return groups
 
     def student_csv(id):
@@ -150,17 +151,17 @@ def _make_csv(reports, output, num_classes, sep):
     grades_header = grades_csv_header()
 
     for group, ids in groups.items():
+        if not ids:  # grupos múltiplos são ignorados
+            continue
+
         file = os.path.join(output,
                             f'{group.replace("/", "-").replace(" ", "_")}.csv')
         with open(file, 'w') as f:
             f.write(f'{full_csv_header()}\n')
-
-            for id in sorted(ids, key=lambda k: locale.strxfrm(
-                                      reports['participants'][k]['Name'])):
-                if reports['participants'][id]['Role'] != 'Estudante':
-                    continue
-
-                f.write(f'{student_csv(id)}\n')
+            f.write('\n'.join(student_csv(id)
+                              for id in sorted(ids,
+                              key=lambda k: locale.strxfrm(
+                                reports['participants'][k]['Name']))))
 
 
 def _parse_args():
