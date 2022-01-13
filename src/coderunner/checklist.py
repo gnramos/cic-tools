@@ -1,7 +1,6 @@
-"""Verificação da configuração de questões do CodeRunner em comparação à
-valores esperados, possibilitando o ajuste automático de algumas.
+"""Batch analysis for CodeRunner question type settings.
 
-Detalhes em: https://github.com/trampgeek/moodle-qtype_coderunner
+Details in: https://github.com/trampgeek/moodle-qtype_coderunner
 """
 
 import re
@@ -9,6 +8,7 @@ import xml.etree.ElementTree as ET
 
 
 #######################################################################
+# Override CDATA serialization for HTML.
 def _CDATA(text=None):
     # text = re.sub(r']]>', r']]&gt;', text)
     element = ET.Element('![CDATA[')
@@ -40,19 +40,18 @@ Uses a specific static method per setting, if available.
 """
 
 DEFAULT_EMPTY = "This should have no value!"
-DEFAULT_NOT_EMPTY = "This must have a value!"
 UNFIXABLE = ['answer', 'tags', 'template', 'testcases']
 DEFAULTS = {  # setting: list of values
     'allornothing': ['0'],
-    'answer': [''],  # necessário
+    'answer': [''],  # required
     'coderunnertype': ['python3_try_except'],
     'cputimelimitsecs': ['', DEFAULT_EMPTY],
     'defaultgrade': ['1.0000000', '1'],
-    'displayfeedback': ['0'],  # [Set by quiz, Force Show, Force hide]
-    'generalfeedback': [''],  # necessário
+    'displayfeedback': ['0'],  # [SET BY QUIZ, Force hide]
+    'generalfeedback': [''],  # required
     'memlimitmb': ['', DEFAULT_EMPTY],
     'penaltyregime': ['0, 0, 10, 20, ...'],
-    'precheck': ['2'],  # [Disabled, Empty, Examples, Selected, All]
+    'precheck': ['2'],  # [Disabled, Empty, EXAMPLES, Selected, All]
     'validateonsave': ['1'],
     'testcases': {'example': ('1', '0.0010000', 'SHOW', 3),
                   'visible': ('0', '1.0000000', 'SHOW', 3),
@@ -60,10 +59,10 @@ DEFAULTS = {  # setting: list of values
     }
 
 
-def _add_CDATA(question):
+def _add_CDATA(question, html_fragments=('generalfeedback/text',
+                                         'questiontext/text')):
     # Tags with possible special characters
     # for element in question.findall('.//*[@format="html"]'):
-    html_fragments = ('generalfeedback/text', 'questiontext/text')
     for tag in html_fragments:
         element = question.find(tag)
         if element is not None and element.text and element.text.strip():
@@ -72,7 +71,7 @@ def _add_CDATA(question):
             element.append(_CDATA(text))
 
 
-# # _check_SETTING methods
+# _check_SETTING methods
 def _check_default(question, setting, values=[]):
     """Checks the question for the given setting.
 
@@ -83,10 +82,10 @@ def _check_default(question, setting, values=[]):
         element = question.find(f'{setting}')
     if element is not None and (text := element.text):
         if values and text not in values and values[0]:
-            return f'é "{text}" (deveria ser "{values[0]}")'
+            return f'value is "{text}" (should be "{values[0]}")'
     elif values:
         if DEFAULT_EMPTY not in values:
-            return 'ausente'
+            return 'missing'
 
 
 def _check_displayfeedback(question, values):
@@ -108,19 +107,21 @@ def _check_precheck(question, values):
 
 
 def _check_questiontext(question, values):
+    # questiontext should start with the question name as its title and between
+    # <h3> tags. <span> tags should not exist.
     questiontext = question.find('questiontext/text').text
 
     if values and questiontext not in values:
-        return f'é "{questiontext}" (deveria estar em "{values}")'
+        return f'value is "{questiontext}" (should be in "{values}")'
 
     name = question.find('name/text').text
     issues = ''
     if f'<h3>{name}</h3>' not in questiontext:
-        issues = 'não apresenta título no formato previsto'
+        issues = 'title format is incorrect'
     if '<span' in questiontext:
         if issues:
-            issues = f'{issues} e '
-        issues = f'{issues}tem tag <span>'
+            issues = f'{issues} and '
+        issues = f'{issues}has tag <span>'
     return issues
 
 
@@ -132,7 +133,7 @@ def _check_setting(question, setting, values):
         return f'[{setting}] {issues}'
 
 
-def _check_tags(question, value):
+def _check_tags(question, value, expected_tags=('fácil', 'médio', 'difícil')):
     tags = [test.text for test in question.findall('tags/tag/text')]
     if value:
         if isinstance(value, list):
@@ -140,19 +141,19 @@ def _check_tags(question, value):
         else:
             ausentes = '' if value in tags else value
         if ausentes:
-            return f'é "{tags}" (deveria conter "{ausentes}")'
-    elif num_tags := sum(tag.lower() in ('fácil', 'médio', 'difícil')
+            return f'value is "{tags}" (should have "{ausentes}")'
+    elif num_tags := sum(tag.lower() in expected_tags
                          for tag in tags):
         if num_tags > 1:
-            return 'múltiplos níveis de dificuldade'
+            return 'multiple difficulty levels'
     else:
-        return 'nível de dificuldade ausente'
+        return 'difficulty level missing'
 
 
 def _check_template(question, value):
     text = question.find('template').text
     if value and text and value != text:
-        return ' tem template de correção'
+        return ' has a template'
 
 
 def _check_testcases(question, value):
@@ -166,34 +167,33 @@ def _check_testcases(question, value):
             if has_issue := (mark_value != test.attrib['mark']):
                 if issues:
                     issues = f'{issues}. '
-
-                issues = (f'Caso {t} tem pontuação '
+                issues = (f'{issues}Test case {t} mark is '
                           f'{test.attrib["mark"]} '
-                          f'(deveria ser {mark_value})')
+                          f'(should be {mark_value})')
 
             display = test.find('display/text').text
             if display != display_value:
-                issues = f'{issues} e' if has_issue else f'Caso {t}'
-                issues = (f'{issues} tem visibilidade {display} '
-                          f'(deveria ser "{display_value}")')
+                issues = f'{issues} and' if has_issue else f'Test case {t}'
+                issues = (f'{issues} visibility is {display} '
+                          f'(should be "{display_value}")')
 
         if len(cases) != num_cases:
             if useasexample == '1':
-                test_type = 'exemplos'
+                test_type = 'example'
             elif display_value == 'SHOW':
-                test_type = 'visíveis'
+                test_type = 'visible'
             else:
-                test_type = 'escondidos'
-            issues = f'{issues} e são' if issues else 'São'
-            issues = (f'{issues} {len(cases)} testes {test_type} '
-                      f'(deveriam ser {num_cases})')
+                test_type = 'hidden'
+            issues = f'{issues} and there are' if issues else 'There are'
+            issues = (f'{issues} {len(cases)} {test_type} test cases '
+                      f'(should be {num_cases})')
 
         return issues
 
     issues = [check(*value[case])
               for case in ('example', 'visible', 'hidden')]
 
-    return '. '.join(x for x in issues if x)
+    return '. '.join(issue for issue in issues if issue)
 
 
 def _clean_html(html):
@@ -207,7 +207,7 @@ def _clean_html(html):
                     (r'&nbsp;', ' '),
                     (r'<([^ ]*?)><br></(\1)>', ''),
                     (r'<([^ ]*?)></(\1)>', ''),
-                    # Tentanto eliminar <span> vazios aninhados.
+                    # Remove nested <span>.
                     (r'(<span>[.\s\S]*?</span>)', replace_empty_span),
                     (r'(<span>[.\s\S]*?</span>)', replace_empty_span))
 
@@ -246,6 +246,8 @@ def _fix_default(question, setting, value):
 
 
 def _fix_questiontext(question, value=None):
+    # questiontext should start with the question name as its title and between
+    # <h3> tags. <span> tags should not exist.
     name = question.find('name/text').text
     questiontext = question.find('questiontext/text')
 
@@ -261,7 +263,7 @@ def _fix_questiontext(question, value=None):
 
 def _fix_setting(category, question, setting, value, sep=' > '):
     if setting in UNFIXABLE:
-        return f'Não é possível ajustar "{setting}"!'
+        return f'Unable to fix "{setting}"!'
 
     if f'_fix_{setting}' in globals():
         exec(f'_fix_{setting}(question, value)')
@@ -336,9 +338,8 @@ def check(file, values, outfile=None, set_values=False,
                 if yes_to_all:
                     fix_value = True
                 else:
-                    response = input(f'Tentar ajustar o valor de "{setting}"?'
-                                     ' [Y/N] ')
-                    fix_value = response and response in 'yY'
+                    response = input(f'Change "{setting}" value? [Y/N] ')
+                    fix_value = (response and response in 'yY')
 
                 if fix_value:
                     if isinstance(value, list) and value:
@@ -347,7 +348,7 @@ def check(file, values, outfile=None, set_values=False,
                                              value, sep):
                         print(f'\t[{setting}] {issue}')
                     else:
-                        print(f'\t[{setting}] ajustado!')
+                        print(f'\t[{setting}] changed!')
                 print()
 
         if set_values:
@@ -360,7 +361,7 @@ def check(file, values, outfile=None, set_values=False,
 
 
 def main():
-    """Processa argumentos da linha de comando."""
+    """Process command line arguments."""
 
     from argparse import ArgumentParser
 
