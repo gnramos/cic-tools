@@ -4777,7 +4777,7 @@ print(num)
     <filenamesexplain></filenamesexplain>
     <displayfeedback>0</displayfeedback>
     <testcases>
-      <testcase testtype="0" useasexample="1" hiderestiffail="0" mark="1.0000000" >
+      <testcase testtype="0" useasexample="1" hiderestiffail="0" mark="0.0010000" >
       <testcode>
                 <text></text>
       </testcode>
@@ -4796,7 +4796,7 @@ print(num)
                 <text>SHOW</text>
       </display>
     </testcase>
-      <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="0.0010000" >
+      <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="1.0000000" >
       <testcode>
                 <text></text>
       </testcode>
@@ -4815,7 +4815,7 @@ print(num)
                 <text>SHOW</text>
       </display>
     </testcase>
-      <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="0.0010000" >
+      <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="1.0000000" >
       <testcode>
                 <text></text>
       </testcode>
@@ -5775,7 +5775,7 @@ print(num)
                 <text></text>
       </extra>
       <display>
-                <text>HIDE</text>
+                <text>SHOW</text>
       </display>
     </testcase>
       <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="3.0000000" >
@@ -5845,63 +5845,6 @@ print(num)
       </stdin>
       <expected>
                 <text>10
-</text>
-      </expected>
-      <extra>
-                <text></text>
-      </extra>
-      <display>
-                <text>HIDE</text>
-      </display>
-    </testcase>
-      <testcase testtype="0" useasexample="1" hiderestiffail="0" mark="0.0010000" >
-      <testcode>
-                <text></text>
-      </testcode>
-      <stdin>
-                <text>11
-</text>
-      </stdin>
-      <expected>
-                <text>11
-</text>
-      </expected>
-      <extra>
-                <text></text>
-      </extra>
-      <display>
-                <text>SHOW</text>
-      </display>
-    </testcase>
-      <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="1.0000000" >
-      <testcode>
-                <text></text>
-      </testcode>
-      <stdin>
-                <text>12
-</text>
-      </stdin>
-      <expected>
-                <text>12
-</text>
-      </expected>
-      <extra>
-                <text></text>
-      </extra>
-      <display>
-                <text>HIDE</text>
-      </display>
-    </testcase>
-      <testcase testtype="0" useasexample="0" hiderestiffail="0" mark="1.0000000" >
-      <testcode>
-                <text></text>
-      </testcode>
-      <stdin>
-                <text>13
-</text>
-      </stdin>
-      <expected>
-                <text>13
 </text>
       </expected>
       <extra>
