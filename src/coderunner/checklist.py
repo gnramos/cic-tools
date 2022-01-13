@@ -157,42 +157,35 @@ def _check_template(question, value):
 
 
 def _check_testcases(question, value):
-    def check(useasexample, mark_value, display_value, num_cases):
+    def check(case):
+        useasexample, mark, display, num_cases = value[case]
         cases = [test for test in question.findall(
             f'testcases/testcase[@useasexample="{useasexample}"]')
-            if test.find('display/text').text == display_value]
+            if test.find('display/text').text == display]
 
         issues = ''
         for t, test in enumerate(cases):
-            if has_issue := (mark_value != test.attrib['mark']):
+            if has_issue := (mark != test.attrib['mark']):
                 if issues:
                     issues = f'{issues}. '
-                issues = (f'{issues}Test case {t} mark is '
+                issues = (f'{issues}Test case {case}[{t}] mark is '
                           f'{test.attrib["mark"]} '
-                          f'(should be {mark_value})')
+                          f'(should be {mark})')
 
             display = test.find('display/text').text
-            if display != display_value:
+            if display != display:
                 issues = f'{issues} and' if has_issue else f'Test case {t}'
                 issues = (f'{issues} visibility is {display} '
-                          f'(should be "{display_value}")')
+                          f'(should be "{display}")')
 
         if len(cases) != num_cases:
-            if useasexample == '1':
-                test_type = 'example'
-            elif display_value == 'SHOW':
-                test_type = 'visible'
-            else:
-                test_type = 'hidden'
             issues = f'{issues} and there are' if issues else 'There are'
-            issues = (f'{issues} {len(cases)} {test_type} test cases '
+            issues = (f'{issues} {len(cases)} {case} test cases '
                       f'(should be {num_cases})')
 
         return issues
 
-    issues = [check(*value[case])
-              for case in ('example', 'visible', 'hidden')]
-
+    issues = [check(case) for case in ('example', 'visible', 'hidden')]
     return '. '.join(issue for issue in issues if issue)
 
 
