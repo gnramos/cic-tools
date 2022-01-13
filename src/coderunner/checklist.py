@@ -157,36 +157,43 @@ def _check_template(question, value):
 
 
 def _check_testcases(question, value):
-    def check(case):
-        useasexample, mark, display, num_cases = value[case]
-        cases = [test for test in question.findall(
-            f'testcases/testcase[@useasexample="{useasexample}"]')
-            if test.find('display/text').text == display]
+    def get_case(test):
+        if test.find('display/text').text == 'HIDE':
+            return 'hidden'
+        if test.attrib['useasexample'] == '1':
+            return 'example'
+        return 'visible'
 
+    def check(test, useasexample, mark, display, num_cases):
         issues = ''
-        for t, test in enumerate(cases):
-            if has_issue := (mark != test.attrib['mark']):
-                if issues:
-                    issues = f'{issues}. '
-                issues = (f'{issues}Test case {case}[{t}] mark is '
-                          f'{test.attrib["mark"]} '
-                          f'(should be {mark})')
+        if has_issue := (mark != test.attrib['mark']):
+            if issues:
+                issues = f'{issues}. '
+            issues = (f'{issues}Test case {t + 1} mark is '
+                      f'{test.attrib["mark"]} '
+                      f'(should be {mark})')
 
-            display = test.find('display/text').text
-            if display != display:
-                issues = f'{issues} and' if has_issue else f'Test case {t}'
-                issues = (f'{issues} visibility is {display} '
-                          f'(should be "{display}")')
-
-        if len(cases) != num_cases:
-            issues = f'{issues} and there are' if issues else 'There are'
-            issues = (f'{issues} {len(cases)} {case} test cases '
-                      f'(should be {num_cases})')
+        if (d := test.find('display/text').text) != display:
+            issues = f'{issues} and' if has_issue else f'Test case {t}'
+            issues = (f'{issues} visibility is {d} '
+                      f'(should be "{display}")')
 
         return issues
 
-    issues = [check(case) for case in ('example', 'visible', 'hidden')]
-    return '. '.join(issue for issue in issues if issue)
+    counter, issues = {'example': 0, 'visible': 0, 'hidden': 0}, []
+    for t, test in enumerate(question.findall('testcases/testcase')):
+        case = get_case(test)
+        counter[case] += 1
+
+        if issue := check(test, *value[case]):
+            issues.append(issue)
+
+    for case, count in counter.items():
+        if count != value[case][-1]:
+            issues.append(f'There are {count} {case} test cases '
+                          f'(should be {value[case][-1]})')
+
+    return '. '.join(issue for issue in issues)
 
 
 def _clean_html(html):
