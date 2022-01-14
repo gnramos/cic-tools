@@ -301,6 +301,20 @@ def check(file, values, outfile=None, set_values=False,
       - sep: string for separating question category levels.
              (default: ' > ')
     """
+    def fix_issue(category, question, setting, value, sep):
+        if issue := _fix_setting(category, question, setting,
+                                 value, sep):
+            print(f'\t[{setting}] {issue}')
+        else:
+            print(f'\t[{setting}] changed!')
+
+    def parse_category(category):
+        return category.replace("/", sep) if category else '[No category]'
+
+    def user_fix(setting):
+        response = input(f'Change "{setting}" value? [Y/N] ')
+        return (response and response in 'yY')
+
     if outfile is None:
         from datetime import datetime
 
@@ -319,32 +333,17 @@ def check(file, values, outfile=None, set_values=False,
             if setting in ignore_list:
                 continue
 
-            issues = _check_setting(question, setting, value)
-            if issues:
-                all_valid = False
-                if category:
-                    category = category.replace("/", sep)
-                else:
-                    category = '[No category]'
+            if issues := _check_setting(question, setting, value):
+                all_valid, category = False, parse_category(category)
                 print(f'{category}{sep}{name}: {issues}.')
 
                 if not set_values:
                     continue
 
-                if yes_to_all:
-                    fix_value = True
-                else:
-                    response = input(f'Change "{setting}" value? [Y/N] ')
-                    fix_value = (response and response in 'yY')
-
-                if fix_value:
+                if yes_to_all or user_fix(setting):
                     if isinstance(value, list) and value:
                         value = value[0]
-                    if issue := _fix_setting(category, question, setting,
-                                             value, sep):
-                        print(f'\t[{setting}] {issue}')
-                    else:
-                        print(f'\t[{setting}] changed!')
+                    fix_issue(category, question, setting, value, sep)
                 print()
 
         if set_values:
