@@ -157,62 +157,58 @@ def _check_template(question, value):
 
 
 def _check_testcases(question, value):
-    def get_case(test):
+    def get_type(test):
         if test.find('display/text').text == 'HIDE':
             return 'hidden'
         if test.attrib['useasexample'] == '1':
             return 'example'
         return 'visible'
 
-    def check(test, useasexample, mark, display, num_cases):
-        issues = ''
-        if has_issue := (mark != test.attrib['mark']):
-            if issues:
-                issues = f'{issues}. '
-            issues = (f'{issues}Test case {t + 1} mark is '
-                      f'{test.attrib["mark"]} '
-                      f'(should be {mark})')
+    def check(t, test, useasexample, mark, display, num_cases):
+        issue = ''
+        if mark != test.attrib['mark']:
+            issue = (f'{issue}Test case {t} mark is {test.attrib["mark"]} '
+                     f'(should be {mark})')
 
         if (d := test.find('display/text').text) != display:
-            issues = f'{issues} and' if has_issue else f'Test case {t}'
-            issues = (f'{issues} visibility is {d} '
-                      f'(should be "{display}")')
+            issue = f'{issue} and' if issue else f'Test case {t}'
+            issue = (f'{issue} visibility is {d} '
+                     f'(should be "{display}")')
 
-        return issues
+        return issue
 
     counter, issues = {'example': 0, 'visible': 0, 'hidden': 0}, []
     for t, test in enumerate(question.findall('testcases/testcase')):
-        case = get_case(test)
-        counter[case] += 1
+        test_type = get_type(test)
+        counter[test_type] += 1
 
-        if issue := check(test, *value[case]):
+        if issue := check(t + 1, test, *value[test_type]):
             issues.append(issue)
 
-    for case, count in counter.items():
-        if count != value[case][-1]:
-            issues.append(f'There are {count} {case} test cases '
-                          f'(should be {value[case][-1]})')
+    for test_type, count in counter.items():
+        if count != value[test_type][-1]:
+            issues.append(f'There are {count} {test_type} tests '
+                          f'(should be {value[test_type][-1]})')
 
     return '. '.join(issue for issue in issues)
 
 
 def _clean_html(html):
-    def replace_empty_span(matchobj):
-        return matchobj.group(0)[6:-7]
+    def remove_span_tag(matchobj):
+        return matchobj.group(0)[6:-7]  # chars between <span> and </span>
 
-    replacements = (  # (r'(<(?!\/)[^>]+>)+(<\/[^>]+>)+', ''),
-                    (r'( style="font-size: \d+\.\d+rem;"?)', ''),
+    replacements = ((r'( style="font-size: \d+\.\d+rem;"?)', ''),
                     (r'( style="")', ''),
-                    (r'(<span>[.\s\S]*?</span>)', replace_empty_span),
+                    (r'(<span>[.\s\S]*?</span>)', remove_span_tag),
                     (r'&nbsp;', ' '),
                     (r'<([^ ]*?)><br></(\1)>', ''),
                     (r'<([^ ]*?)></(\1)>', ''),
                     # Remove nested <span>.
-                    (r'(<span>[.\s\S]*?</span>)', replace_empty_span),
-                    (r'(<span>[.\s\S]*?</span>)', replace_empty_span))
+                    (r'(<span>[.\s\S]*?</span>)', remove_span_tag),
+                    (r'(<span>[.\s\S]*?</span>)', remove_span_tag))
 
-    for pattern, repl in replacements:
-        html = re.sub(pattern, repl, html)
+    for pattern, replace in replacements:
+        html = re.sub(pattern, replace, html)
 
     return html
 
