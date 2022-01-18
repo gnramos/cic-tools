@@ -40,7 +40,7 @@ Uses a specific static method per setting, if available.
 """
 
 DEFAULT_EMPTY = "This should have no value!"
-UNFIXABLE = ['answer', 'tags', 'template', 'testcases']
+CANT_CHANGE = ['answer', 'tags', 'template', 'testcases']
 DEFAULTS = {  # setting: list of values
     'allornothing': ['0'],
     'answer': [''],  # required
@@ -69,6 +69,40 @@ def _add_CDATA(question, html_fragments=('generalfeedback/text',
             text = _clean_html(element.text.strip())
             element.clear()
             element.append(_CDATA(text))
+
+
+# _change_SETTING methods
+def _change_default(question, setting, value):
+    if value is not None and question.find(setting).text != value:
+        question.find(setting).text = value
+
+
+def _change_questiontext(question, value=None):
+    # questiontext should start with the question name as its title and between
+    # <h3> tags. <span> tags should not exist.
+    name = question.find('name/text').text
+    questiontext = question.find('questiontext/text')
+
+    # Handle regex characters.
+    name = ''.join(f'\\{c}' if c in r'\{[()]}.' else c for c in name)
+    pattern = f'<h(\\d)>(.*?)({name})(.*?)</h\\d>'
+    if m := re.search(pattern, questiontext.text, flags=re.IGNORECASE):
+        if m.groups() != ('3', '', name, ''):
+            questiontext.text = re.sub(pattern, '', questiontext.text,
+                                       flags=re.IGNORECASE)
+    questiontext.text = f'<h3>{name}</h3>\n{questiontext.text.lstrip()}'
+
+
+def _change_setting(category, question, setting, value, sep=' > '):
+    if setting in CANT_CHANGE:
+        return f'Unable to change "{setting}"!'
+
+    if f'_change_{setting}' in globals():
+        exec(f'_change_{setting}(question, value)')
+    else:
+        _change_default(question, setting, value)
+
+    return ''
 
 
 # _check_SETTING methods
@@ -235,40 +269,6 @@ def _coderunner_questions(file):
             yield tree, category, question
 
 
-# _fix_SETTING methods
-def _fix_default(question, setting, value):
-    if value is not None and question.find(setting).text != value:
-        question.find(setting).text = value
-
-
-def _fix_questiontext(question, value=None):
-    # questiontext should start with the question name as its title and between
-    # <h3> tags. <span> tags should not exist.
-    name = question.find('name/text').text
-    questiontext = question.find('questiontext/text')
-
-    # Handle regex characters.
-    name = ''.join(f'\\{c}' if c in r'\{[()]}.' else c for c in name)
-    pattern = f'<h(\\d)>(.*?)({name})(.*?)</h\\d>'
-    if m := re.search(pattern, questiontext.text, flags=re.IGNORECASE):
-        if m.groups() != ('3', '', name, ''):
-            questiontext.text = re.sub(pattern, '', questiontext.text,
-                                       flags=re.IGNORECASE)
-    questiontext.text = f'<h3>{name}</h3>\n{questiontext.text.lstrip()}'
-
-
-def _fix_setting(category, question, setting, value, sep=' > '):
-    if setting in UNFIXABLE:
-        return f'Unable to fix "{setting}"!'
-
-    if f'_fix_{setting}' in globals():
-        exec(f'_fix_{setting}(question, value)')
-    else:
-        _fix_default(question, setting, value)
-
-    return ''
-
-
 def _print_dict(d, indent_level=0):
     for k, v in d.items():
         if isinstance(v, dict):
@@ -302,8 +302,8 @@ def check(file, values, outfile=None, set_values=False,
              (default: ' > ')
     """
     def fix_issue(category, question, setting, value, sep):
-        if issue := _fix_setting(category, question, setting,
-                                 value, sep):
+        if issue := _change_setting(category, question, setting,
+                                    value, sep):
             print(f'\t[{setting}] {issue}')
         else:
             print(f'\t[{setting}] changed!')
