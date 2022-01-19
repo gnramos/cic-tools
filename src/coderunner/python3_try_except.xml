@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quiz>
+<!-- question: 19003866  -->
+  <question type="coderunner">
+    <name>
+      <text>PROTOTYPE_python3_try_except</text>
+    </name>
+    <questiontext format="html">
+      <text><![CDATA[<p>Protótipo para correção de código em Python 3 com um controle de exceções. A ideia é que não sejam lançadas, de modo que todos os casos de teste sejam avaliados.</p>
+<p>Caso haja uma exceção na execução, a mensagem é apresentada na saída padrão, evitando a correção seja interrompida. Como espera-se que a mensagem da exceção seja diferente da resposta esperada para o caso de teste, a correção do teste será correta.</p>
+<p>Atualizações:</p>
+<p><strong>2021/08/27</strong> - Inclusão de flag <code>ANSWER_OK</code> para controlar execução de testes conforme a corretude da sintaxe da resposta (adaptação à versão 4.0 do Code Runner). Ajuste de parsing da mensagem de erro na função <code>pretty_tb</code>    para não ficar restrito à erros <tt>File "&lt;string&gt;"</tt>. Remoção de casos de teste.</p>]]></text>
+    </questiontext>
+    <generalfeedback format="html">
+      <text></text>
+    </generalfeedback>
+    <defaultgrade>1</defaultgrade>
+    <penalty>0</penalty>
+    <hidden>0</hidden>
+    <idnumber></idnumber>
+    <coderunnertype>python3_try_except</coderunnertype>
+    <prototypetype>2</prototypetype>
+    <allornothing>0</allornothing>
+    <penaltyregime>0, 0, 10, 20, ...</penaltyregime>
+    <precheck>2</precheck>
+    <hidecheck>0</hidecheck>
+    <showsource>0</showsource>
+    <answerboxlines>18</answerboxlines>
+    <answerboxcolumns>100</answerboxcolumns>
+    <answerpreload># Defina seu programa aqui.</answerpreload>
+    <globalextra></globalextra>
+    <useace>1</useace>
+    <resultcolumns></resultcolumns>
+    <template><![CDATA[import traceback
+
+
+ANSWER_OK_correcthorsebatterystaple = True
+
+
+def pretty_tb(origin):
+    lines = traceback.format_exc().splitlines()
+    i = len(lines) - 1
+    while i >= 0 and not lines[i].startswith('  File '):
+        i -= 1
+    lines = lines[i:]
+    if i >= 0 and lines:
+        lines[0] = 'Line: ' + lines[0].split(', ')[1].split()[-1]
+        print(f'*** {origin} Error! ***')
+        print('\n'.join(lines))
+    else:
+        traceback.print_exc()
+
+try:
+    exec("""{{ STUDENT_ANSWER | e('py') }}""")
+except Exception:
+    pretty_tb('Answer')
+    ANSWER_OK_correcthorsebatterystaple = False
+
+SEPARATOR = "#<ab@17943918#@>#"
+
+{% for TEST in TESTCASES %}
+if ANSWER_OK_correcthorsebatterystaple:
+    try:
+        exec("""{{ TEST.testcode }}""")
+    except Exception:
+        pretty_tb('Test')
+{% if not loop.last %}
+print(SEPARATOR)
+{% endif %}
+{% endfor %}]]></template>
+    <iscombinatortemplate>1</iscombinatortemplate>
+    <allowmultiplestdins>0</allowmultiplestdins>
+    <answer></answer>
+    <validateonsave>1</validateonsave>
+    <testsplitterre><![CDATA[|#<ab@17943918#@>#\n|ms]]></testsplitterre>
+    <language>python3</language>
+    <acelang></acelang>
+    <sandbox></sandbox>
+    <grader>EqualityGrader</grader>
+    <cputimelimitsecs></cputimelimitsecs>
+    <memlimitmb></memlimitmb>
+    <sandboxparams></sandboxparams>
+    <templateparams></templateparams>
+    <hoisttemplateparams>1</hoisttemplateparams>
+    <templateparamslang>twig</templateparamslang>
+    <templateparamsevalpertry>0</templateparamsevalpertry>
+    <templateparamsevald>{}</templateparamsevald>
+    <twigall>0</twigall>
+    <uiplugin>ace</uiplugin>
+    <uiparameters></uiparameters>
+    <attachments>0</attachments>
+    <attachmentsrequired>0</attachmentsrequired>
+    <maxfilesize>10240</maxfilesize>
+    <filenamesregex></filenamesregex>
+    <filenamesexplain></filenamesexplain>
+    <displayfeedback>0</displayfeedback>
+    <testcases>
+      <testcase testtype="0" useasexample="1" hiderestiffail="0" mark="0.0010000" >
+      <testcode>
+                <text>pass</text>
+      </testcode>
+      <stdin>
+                <text></text>
+      </stdin>
+      <expected>
+                <text></text>
+      </expected>
+      <extra>
+                <text></text>
+      </extra>
+      <display>
+                <text>SHOW</text>
+      </display>
+    </testcase>
+      <testcase testtype="0" useasexample="1" hiderestiffail="0" mark="0.0010000" >
+      <testcode>
+                <text></text>
+      </testcode>
+      <stdin>
+                <text></text>
+      </stdin>
+      <expected>
+                <text>0</text>
+      </expected>
+      <extra>
+                <text></text>
+      </extra>
+      <display>
+                <text>SHOW</text>
+      </display>
+    </testcase>
+    </testcases>
+  </question>
+
+</quiz>
