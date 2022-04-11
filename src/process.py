@@ -30,23 +30,23 @@ def _load(files):
 
     onde:
         CURSO: sigla da disciplina.
-        PERÍODO: período de realização da disciplina no formato ano-semestre
-                (P em {0,1,2}),
-        ORIGEM: plataforma de origem o relatório,
+        AAAA-P: período de realização da disciplina no formato ano-semestre
+                (P em {0,1,2}).
+        ORIGEM: plataforma de origem o relatório.
         RELATORIO: tipo de relatório:
-                   - attendance: relatório de presença de reunião via Teams:
-                       - EXTRA:  data da reunião (formato YYYY-MM-DD).
-                   - grades: relatório de notas do Moodle.
-                   - participants: página de usuários do Moodle.
-                   - progress: relatório de atividades completadas do Moodle.
-                   - quiz.grades: relatório de notas de questionários do
-                                  Moodle. Neste caso, EXTRA identifica o
-                                  questionário.
-                   - quiz.responses: relatório de submissões de questionários
-                                     do Moodle. Neste caso, EXTRA: identifica o
-                                     questionário.
+            - attendance: relatório de presença de reunião via Teams. Neste
+                          caso, EXTRA deve ser a data da reunião (formato
+                          YYYY-MM-DD).
+            - grades: relatório de notas do Moodle.
+            - participants: página de usuários do Moodle.
+            - progress: relatório de atividades completadas do Moodle.
+            - quiz.grades: relatório de notas de questionários do Moodle. Neste
+                           caso, EXTRA identifica o questionário.
+            - quiz.responses: relatório de submissões de questionários do
+                              Moodle. Neste caso, EXTRA: identifica o
+                              questionário.
         EXTRA: informação adicional sobre o arquivo (opcional),
-        EXT: extensão o arquivo,
+        EXT: extensão o arquivo.
 
     A estrutura do dicionário é: [curso][período][info]
     """
@@ -57,7 +57,7 @@ def _load(files):
                               r'(attendance|grades|'     # RELATORIO (abordagem
                               r'participants|progress|'  # gulosa, a ordem faz
                               r'quiz\.grades|'           # diferença)
-                              r'quiz\.responses|quiz)'
+                              r'quiz\.responses|quiz)(?=\.)'
                               r'\.?(.*)?'                # EXTRA (opcional)
                               r'\.(csv|html|json)')      # EXT
 
@@ -71,28 +71,27 @@ def _load(files):
             current = eval(f'{source}.{report}.read(full_path, extra)')
 
             if course not in data:
-                data[course] = {period: {}}
-                attendance[course] = {period: {}}
-                attendance[course][period]['Total'] = 0
+                data[course] = {period: defaultdict(dict)}
+                attendance[course] = {period: {'Total': 0}}
 
             if report == 'attendance':
                 attendance[course][period]['Total'] += 1
-                for id in current:
-                    attendance[course][period][id] += 1
+                for student_id in current:
+                    attendance[course][period][student_id] += 1
             else:
                 if report not in data[course][period]:
                     data[course][period][report] = current
                 elif extra:
-                    for id, value in current.items():
-                        if id not in data[course][period][report]:
-                            data[course][period][report][id] = {}
-                        data[course][period][report][id].update(value)
+                    for student_id, value in current.items():
+                        if student_id not in data[course][period][report]:
+                            data[course][period][report][student_id] = {}
+                        data[course][period][report][student_id].update(value)
 
     for course, periods in attendance.items():
         for period, info in periods.items():
             data[course][period]['attendance'] = {
-                id: (100 * info.get(id, 0)) // info['Total']
-                for id in info if id != 'Total'}
+                student_id: (100 * info.get(student_id, 0)) // info['Total']
+                for student_id in info if student_id != 'Total'}
 
     return data
 
@@ -110,7 +109,7 @@ def _make_csv(reports, output, num_classes, sep):
     """
 
     def full_csv_header():
-        return sep.join(['Matrícula', 'Nome', grades_header,
+        return sep.join(['Matrícula', 'Nome', grades_csv_header(),
                          f'Faltas (em {num_classes})'
                          if num_classes else 'Progresso (%)'])
 
@@ -125,7 +124,7 @@ def _make_csv(reports, output, num_classes, sep):
                             'Grades', {}).values())
 
     def progress(id):
-        absent = reports['progress'].get(id, {}).get("Faltas", "?") == '?'
+        absent = reports.get('progress', {}).get(id, {}).get('Faltas', '?') == '?'
 
         if absent == '?':
             return '?'
@@ -134,7 +133,7 @@ def _make_csv(reports, output, num_classes, sep):
             return (int(absent) * num_classes) // 100
         return 100 - int(absent)  # percentual do progresso
 
-    def students_by_groups():
+    def students_by_group():
         groups = defaultdict(list)
         for id, info in reports['participants'].items():
             if reports['participants'][id]['Role'] == 'Estudante':
@@ -147,15 +146,13 @@ def _make_csv(reports, output, num_classes, sep):
 
     locale.setlocale(locale.LC_ALL, '')
 
-    groups = students_by_groups()
-    grades_header = grades_csv_header()
-
-    for group, ids in groups.items():
-        if not ids:  # grupos múltiplos são ignorados
+    for group, ids in students_by_group().items():
+        if not ids:  # múltiplos grupos são ignorados.
             continue
 
         file = os.path.join(output,
                             f'{group.replace("/", "-").replace(" ", "_")}.csv')
+        print(f'writing {file}')
         with open(file, 'w') as f:
             f.write(f'{full_csv_header()}\n')
             f.write('\n'.join(student_csv(id)
@@ -195,74 +192,82 @@ def _parse_args():
 
 def _run_MOSS(reports, output, ext, ignore, threshold):
     """Processa os arquivos para chamar o script MOSS."""
-    def call_and_get_report(path):
-        """Retorna uma tupla com a url com o relatório oficial do MOSS e o
-        nome do arquivo local onde o relatório foi salvo."""
+    def call_moss(path):
+        shell_options = ['-x', '-l python' if ext == 'py' else '']
+        print(f'Calling MOSS... ({path})')
+        return moss.call(shell_options, path, ext)
+
+    def report(path, url):
         basename, question = os.path.split(path)
         basename, quiz = os.path.split(basename)
         moss_report = os.path.join(output, f'moss.quiz.{quiz}.{question}.html')
-        shell_options = ['-x', '-l python' if ext == 'py' else '']
+        return moss_report if moss.get_report(url, moss_report) else ''
 
-        print(f'Calling MOSS... ({path})')
-        if url := moss.call(shell_options, path, ext):
-            if moss.get_report(url, moss_report):
-                return url, moss_report
+    # def call_and_get_report(path):
+    #     """Retorna uma tupla com a url com o relatório oficial do MOSS e o
+    #     nome do arquivo local onde o relatório foi salvo."""
+    #     basename, question = os.path.split(path)
+    #     basename, quiz = os.path.split(basename)
+    #     moss_report = os.path.join(output, f'moss.quiz.{quiz}.{question}.html')
+    #     shell_options = ['-x', '-l python' if ext == 'py' else '']
 
-        return url, ''
+    #     print(f'Calling MOSS... ({path})')
+    #     if url := moss.call(shell_options, path, ext):
+    #         if moss.get_report(url, moss_report):
+    #             return url, moss_report
+
+    #     return url, ''
 
     def print_similar_groups(moss_report, path):
         """Agrupa estudantes com similaridade maior ou igual ao limiar
         fornecido, acrescentando informações de turma e nota obtida, se
         disponíveis.
         """
-        groups = []
-        for group in moss.similar(moss_report, threshold):
-            similar_group = []
-            for id in sorted(group):
-                file = os.path.join(path, f'{id}.{ext}')
-                with open(file, 'r') as f:
-                    name = next(f).strip()
-                    next(f)  # id
-                    group = next(f).strip()
-                    grade = next(f).strip()
-                similar_group.append((name, group, grade))
-            groups.append(similar_group)
+        def get_info(student_id):
+            file = os.path.join(path, f'{student_id}.{ext}')
+            with open(file, 'r') as f:
+                name = next(f).strip()
+                next(f)  # student_id
+                group = next(f).strip()
+                grade = next(f).strip()
+            return name, group, grade
 
+        groups = [[get_info(student_id) for student_id in sorted(group)]
+                  for group in moss.similar(moss_report, threshold)]
         for i, group in enumerate(groups):
-            info = [f'Grupo {i + 1}):'] + [', '.join(i for i in student)
-                                           for student in sorted(group)]
-            print('\n\t'.join(info))
+            info = [', '.join(student_id for student_id in students)
+                    for students in sorted(group)]
+            print('\n\t'.join([f'Grupo {i + 1}):'] + info))
 
-        return groups
-
-    def write_quiz_responses():
-        def extra(id):
-            def grade(id, quiz, question):
-                if (grade := quiz_grades.get(id, {}).get(quiz, {}).get(
+    def write_quiz_responses(reports):
+        def extra(student_id):
+            def grade(student_id, quiz, question):
+                if (grade := quiz_grades.get(student_id, {}).get(quiz, {}).get(
                         question, '?')) != '?':
                     grade = f'{100 * float(grade):.2f}%'
                 return grade
 
-            group = participants.get(id, {}).get('Group', 'Turma ?')
-            return {key: {q: [group, grade(id, key, q)]
+            group = participants.get(student_id, {}).get('Group', 'Turma ?')
+            return {key: {q: [group, grade(student_id, key, q)]
                           for q in questions}
-                    for key, questions in quiz_responses[id].items()
+                    for key, questions in quiz_responses[student_id].items()
                     if key != 'Name'}
 
-        header_extra = {id: extra(id)
-                        for id in quiz_responses}
+        participants, quiz_grades, quiz_responses = (reports['participants'],
+                                                     reports['quiz.grades'],
+                                                     reports['quiz.responses'])
+        header_extra = {student_id: extra(student_id)
+                        for student_id in quiz_responses}
         return moodle.quiz.responses.write(quiz_responses, output, ext,
                                            ignore, header_extra)
 
-    participants, quiz_grades, quiz_responses = (reports['participants'],
-                                                 reports['quiz.grades'],
-                                                 reports['quiz.responses'])
-    for path in write_quiz_responses():
-        url, moss_report = call_and_get_report(path)
-        print(url if url else 'Unable to get URL from MOSS...')
-
-        if moss_report:
-            print_similar_groups(moss_report, path)
+    for path in write_quiz_responses(reports):
+        if url := call_moss(path):
+            print(url)
+            if moss_report := report(path, url):
+                print_similar_groups(moss_report, path)
+        else:
+            print('Unable to get URL from MOSS...')
 
 
 def main():
@@ -280,7 +285,10 @@ def main():
             output = os.path.join(args.output, course, period)
             os.makedirs(output, exist_ok=True)
 
-            _make_csv(reports, output, args.aulas, args.sep)
+            try:
+                _make_csv(reports, output, args.aulas, args.sep)
+            except Exception as e:
+                print(f'{e} while making CSV  report, skipping...')
 
             if args.moss:
                 _run_MOSS(reports, output, args.ext, args.ignore,
