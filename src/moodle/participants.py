@@ -27,7 +27,7 @@ def read(file, group='', role='Estudante'):
         html = htmlfile.read()
 
     pattern = re.compile(r'<label for=.*?user\d+.*?<img.*?>(.*?)</a>.*?'
-                         r'>([\d\w]*?)@(aluno\.)?unb\.br[.\s\S]*?'
+                         r'>([\d\w]*?)@(aluno\.)?.*?\..*?<[.\s\S]*?'
                          r'"Atribuições de papéis.*?>[\s\S] *(\w.*)[\s\S]'
                          r'[.\s\S]*?'
                          r'"Editar grupos.*?>[\s\S] *(\w.*)[\s\S]')
