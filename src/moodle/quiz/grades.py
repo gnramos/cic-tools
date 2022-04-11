@@ -45,7 +45,8 @@ def read(file, quiz, total_only=False):
             grades_idx = range(8, len(header))  # 8 is 1st occurrence of grade.
 
         for row in csvreader:
-            if (s_id := row[2].split('@')[0]).isnumeric():
+            if row[2]:
+                s_id, _ = row[2].split('@')
                 grades[s_id] = {'Name': f'{row[1]} {row[0]}', quiz: {}}
                 for i in grades_idx:
                     question, grade = parse(header[i], row[i])

@@ -43,7 +43,8 @@ def read(file, total_only=False):
         header = [h.replace(' (Real)', '') for h in header]
 
         for row in csvreader:
-            if (s_id := row[EMAIL_IDX].split('@')[0]).isnumeric():
+            if row[EMAIL_IDX]:
+                s_id, _ = row[EMAIL_IDX].split('@')
                 grades[s_id] = {'Name': f'{row[0]} {row[1]}', 'Grades': {}}
                 for i in grades_idx:
                     grade = '0' if row[i] == '-' else row[i]
