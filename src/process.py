@@ -135,19 +135,19 @@ def _make_csv(reports, output, num_classes, sep):
 
     def students_by_group():
         groups = defaultdict(list)
-        for id, info in reports['participants'].items():
-            if reports['participants'][id]['Role'] == 'Estudante':
-                groups[info['Group']].append(id)
+        for s_id, info in reports['participants'].items():
+            if reports['participants'][s_id]['Role'] == 'Estudante':
+                groups[info['Group']].append(s_id)
         return groups
 
-    def student_csv(id):
-        student = sep.join([id, reports['participants'][id]['Name']])
-        return sep.join([student, grades_csv(id), str(progress(id))])
+    def student_csv(s_id):
+        student = sep.join([s_id, reports['participants'][s_id]['Name']])
+        return sep.join([student, grades_csv(s_id), str(progress(s_id))])
 
     locale.setlocale(locale.LC_ALL, '')
 
-    for group, ids in students_by_group().items():
-        if not ids:  # múltiplos grupos são ignorados.
+    for group, s_ids in students_by_group().items():
+        if not s_ids:  # múltiplos grupos são ignorados.
             continue
 
         file = os.path.join(output,
@@ -156,7 +156,7 @@ def _make_csv(reports, output, num_classes, sep):
         with open(file, 'w') as f:
             f.write(f'{full_csv_header()}\n')
             f.write('\n'.join(student_csv(id)
-                              for id in sorted(ids,
+                              for id in sorted(s_ids,
                               key=lambda k: locale.strxfrm(
                                 reports['participants'][k]['Name']))))
 
@@ -202,21 +202,6 @@ def _run_MOSS(reports, output, ext, ignore, threshold):
         basename, quiz = os.path.split(basename)
         moss_report = os.path.join(output, f'moss.quiz.{quiz}.{question}.html')
         return moss_report if moss.get_report(url, moss_report) else ''
-
-    # def call_and_get_report(path):
-    #     """Retorna uma tupla com a url com o relatório oficial do MOSS e o
-    #     nome do arquivo local onde o relatório foi salvo."""
-    #     basename, question = os.path.split(path)
-    #     basename, quiz = os.path.split(basename)
-    #     moss_report = os.path.join(output, f'moss.quiz.{quiz}.{question}.html')
-    #     shell_options = ['-x', '-l python' if ext == 'py' else '']
-
-    #     print(f'Calling MOSS... ({path})')
-    #     if url := moss.call(shell_options, path, ext):
-    #         if moss.get_report(url, moss_report):
-    #             return url, moss_report
-
-    #     return url, ''
 
     def print_similar_groups(moss_report, path):
         """Agrupa estudantes com similaridade maior ou igual ao limiar
@@ -287,8 +272,8 @@ def main():
 
             try:
                 _make_csv(reports, output, args.aulas, args.sep)
-            except Exception as e:
-                print(f'{e} while making CSV  report, skipping...')
+            except Exception:
+                print('Error while making CSV report, skipping...')
 
             if args.moss:
                 _run_MOSS(reports, output, args.ext, args.ignore,
